@@ -71,13 +71,23 @@ async function request(
   })
   if (iconType) params.append(iconType, '1')
 
-  const res = await fetch(API_BASE, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
-  })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const data = await res.json()
+  // Inside Electron the POST is forwarded by the main process
+  // (window.iconFontSearch): iconfont.cn sends no CORS headers, and a file://
+  // page cannot reach a same-origin proxy. In a plain browser we fall back to
+  // the relative fetch (wttch-labs' dev proxy layout).
+  const bridge = window.iconFontSearch
+  const raw: IconfontSearchResponse = bridge
+    ? await bridge(params.toString())
+    : await (async () => {
+        const r = await fetch(API_BASE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+        })
+        return { status: r.status, text: await r.text() }
+      })()
+  if (!raw.text) throw new Error(raw.error || `HTTP ${raw.status}`)
+  const data = JSON.parse(raw.text)
   if (data.code !== 200) throw new Error(data.message || 'iconfont 请求失败')
   const icons = (data.data?.icons ?? []).map(mapIcon)
   return {

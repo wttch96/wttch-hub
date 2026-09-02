@@ -1,0 +1,100 @@
+# wttch-hub
+
+一个基于 Electron + Vue 3 的桌面「小工具集」外壳：在 **Windows** 上渲染出 macOS 风格的异形窗口（无边框圆角 + 红绿灯控制按钮 + 可拖拽顶栏），内嵌可折叠侧栏与多页面路由，并集成了从 [wttch-labs](https://github.com/wttch/wttch-labs) 移植来的四个小工具。
+
+## 功能
+
+- **macOS 风格窗口（仅 Windows）**：`main` 用 `frame:false + transparent` 建无边框窗口，页面根节点以 CSS `border-radius` 画圆角形成异形形状；渲染层用自绘的「红绿灯」（关闭 / 最小化 / 缩放）通过 IPC 控制真实窗口；顶栏整条可拖拽移动窗口（`-webkit-app-region: drag`），双击顶栏走系统默认的最大化 / 还原。
+  - macOS / Linux 保持各自平台的原生窗口框。
+- **可折叠侧栏**：主页 / 小工具 / 设置 三个导航项，可折叠成只剩图标的窄栏。
+- **页面切换**：带淡入淡出的 mac 风格转场。
+- **底部状态栏**：显示当前页面，右侧有调试按钮可开关 Chrome DevTools（以独立窗口打开；dev 模式启动时自动打开）。
+- **四个移植工具**（作为「工具库卡片页 + 嵌套子路由」接入 `/tools`）：
+
+| 路由 | 工具 | 说明 |
+| --- | --- | --- |
+| `/tools` | 小工具库 | 卡片入口页 |
+| `/tools/folderart` | 图标生成器 | 把图片变成 macOS / Windows 风格文件夹图标（PNG 导出） |
+| `/tools/packetdraw` | 协议绘制器 | 用文本描述渲染网络协议时序图（SVG / PNG） |
+| `/tools/radixconv` | 进制转换器 | 2 / 8 / 10 / 16 进制大数互转与位运算 |
+| `/tools/bitparser` | 位段解析器 | 按位段定义逐位解析二进制报文 |
+
+## 技术栈
+
+- Electron Forge 7（Vite 插件）+ Electron 44
+- Vue 3 + TypeScript + `vue-router`（`createWebHashHistory`，兼容打包后的 `file://`）
+- `lucide-vue-next`（图标）
+- 工具侧：`antlr4ng`（packetdraw 语法运行时）、`public/templates/`（folderart 的 48 张模板 PNG，约 26MB）
+
+## 快速开始
+
+```bash
+npm install
+npm start
+```
+
+> 安装了 [rtk](https://github.com/wttch/rtk) 的话可写成 `rtk npm install` / `rtk npm start`。
+
+常用脚本（`package.json`）：
+
+| 脚本 | 作用 |
+| --- | --- |
+| `npm start` | `electron-forge start`，开发模式运行 |
+| `npm run package` | 打包未安装程序（输出到 `out/`） |
+| `npm run make` | 生成平台安装包 |
+| `npm run publish` | 发布 |
+| `npm run lint` | ESLint 检查（`.ts` / `.tsx` / `.vue`） |
+
+### 开发诊断
+
+设 `WTTCH_DIAG=1` 启动，主进程会做一次「路由巡游」：自动依次跳到各页面，输出 DOM 快照并截图到 `.diag/`，用于排查白屏 / 布局问题（设 `WTTCH_DIAG_NO_SHOT=1` 可跳过截图）。
+
+## 目录结构
+
+```
+forge.config.ts / vite.{main,preload,renderer}.config.ts   # 构建配置
+src/
+  main.ts            # Electron 主进程：窗口、IPC、GPU/sandbox 开关、诊断
+  preload.ts         # contextBridge：window.windowControls（窗口控制）
+  renderer.ts        # 入口：挂载 App + 引入全局样式（顺序很重要）
+  App.vue            # 外壳：自绘标题栏 + 侧栏 + 路由出口
+  router.ts          # 路由表（hash 模式）
+  index.css          # hub 全局样式 / 设计变量
+  config/labs-styles.css   # 从 wttch-labs 引入的工具全局样式（须先于 index.css）
+  components/Sidebar.vue
+  views/             # HomeView / ToolsArea / ToolsView / SettingsView
+  tools/             # 从 wttch-labs 移植的四个工具源码
+  lib/  types/  composables/   # 工具共享代码（含空桩 useSiteFooter）
+public/templates/    # folderart 模板 PNG（构建期原样复制到产物）
+```
+
+## 集成 wttch-labs 工具的说明
+
+- 工具源码整体拷贝到 `src/tools/*`，其内部通过 `@/` 别名引用共享模块；渲染端在 `vite.renderer.config.ts` 配了 `@ → ./src`（tsconfig `paths` 同步），所以**不要把 `@/` 改回相对路径**。
+- 工具的全局样式集中在 `src/config/labs-styles.css`，在 `renderer.ts` 中**先于** `src/index.css` 引入：这样 hub 的 `body{ background:transparent; overflow:hidden }` 与 `--accent/--text` 等主题变量能保持最后发言权（圆角透明窗口依赖它）。
+- folderart 需要 `public/templates/` 下的本地模板图；代码统一用相对路径 `./templates/...` 引用，dev 服务器与打包后的 `file://` 都能解析。
+- labs 站点的「页脚」机制（`useSiteFooter`）在 hub 里是空桩 `src/composables/useSiteFooter.ts`，保持调用点签名不变、不渲染任何内容。
+- 打包构建不需要 sharp / express / antlr4ng-cli 等 labs 的**构建期**依赖，只有运行期依赖 `antlr4ng` 进了 `dependencies`。
+
+### 已知限制
+
+1. **folderart 的在线图标搜索需要联网**：搜索请求由主进程用 Electron `net` 转发到 iconfont.cn（等价于原站 dev 代理，见 `src/main.ts` 的 `iconfont:search`），不再依赖 Web 代理，dev 与打包后都可用。匿名搜索返回公开图标；需要更完整结果时，可设环境变量 `ICONFONT_COOKIE=<EGG_SESS_ICONFONT 值>` 启动。离线/被墙时该搜索会报错，不影响本地 PNG 上传与内置模板。
+2. **folderart 的布局断点按“窗口宽度”判定**：窗口宽 ≥ 1024px 才显示完整的三列工作台；较窄窗口（含默认 960px）会按 labs 的响应式退化成单列滚动。最大化窗口即可看到三列布局。
+3. 工具按 Web 场景编写，字体为系统字体栈（Windows 上 `SF Mono` 自动回退 `Consolas`）。
+
+## ⚠️ 环境相关开关（发布前必读）
+
+`src/main.ts` 顶部有一组 **仅为受限开发环境**（远程桌面 / 虚拟机 / CI 无 GPU）准备的开关：
+
+```ts
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('in-process-gpu');
+app.commandLine.appendSwitch('no-sandbox');
+```
+
+它们用于解决此类会话里 Chromium GPU 进程与沙箱子进程启动失败（`error_code=18` / `render-process-gone`）。**发布给真实用户前应移除或按环境开关控制**——尤其 `no-sandbox` 会关闭渲染进程沙箱，绝不能带进正式发行版。
+
+## License
+
+MIT

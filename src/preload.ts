@@ -23,8 +23,25 @@ const windowControls = {
       ipcRenderer.removeListener('win:maximized-changed', listener);
     };
   },
+
+  /** Open or close the Chrome DevTools (detached) for this window. */
+  toggleDevTools: () => ipcRenderer.send('win:toggle-devtools'),
 };
 
 export type WindowControlsApi = typeof windowControls;
 
 contextBridge.exposeInMainWorld('windowControls', windowControls);
+
+// folderart's online icon-font search needs a same-origin proxy to iconfont.cn
+// (which sends no CORS headers). The main process forwards the POST over
+// Electron's network stack, so it works both from the dev server and file://.
+export type IconfontSearchResponse = {
+  status: number;
+  text: string;
+  error?: string;
+};
+
+const iconFontSearch = (body: string): Promise<IconfontSearchResponse> =>
+  ipcRenderer.invoke('iconfont:search', body);
+
+contextBridge.exposeInMainWorld('iconFontSearch', iconFontSearch);

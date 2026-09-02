@@ -1,8 +1,25 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
+import { Bug } from 'lucide-vue-next';
 import Sidebar from './components/Sidebar.vue';
 
 const appName = 'wttch-hub';
+
+const route = useRoute();
+
+// The bottom status bar names where you are; its right-hand debug button toggles
+// the Chrome DevTools (opened detached so the custom window keeps its shape).
+const pageLabel = computed(() => {
+  const title = route.meta?.title as string | undefined;
+  if (route.meta?.tool && title) return `小工具 · ${title}`;
+  const byName: Record<string, string> = {
+    home: '主页',
+    tools: '工具库',
+    settings: '设置',
+  };
+  return byName[String(route.name)] ?? String(route.name ?? '');
+});
 
 // Custom chrome is drawn only on Windows (see src/main.ts); on macOS/Linux the
 // OS provides the native frame and its own window controls, so we render a
@@ -27,6 +44,17 @@ onBeforeUnmount(() => {
 const minimize = () => controls?.minimize();
 const toggleMaximize = () => controls?.toggleMaximize();
 const close = () => controls?.close();
+const toggleDevTools = () => controls?.toggleDevTools();
+
+// Native behaviour on both platforms: double-clicking the title bar toggles
+// between maximized and restored. On Windows a frame:false window does not
+// always translate a double-click on a -webkit-app-region: drag area into a
+// maximize on its own, so handle it explicitly here (clicks over the traffic
+// lights are excluded - those mirror the native caption buttons).
+const onTitleDblClick = (event: MouseEvent) => {
+  if ((event.target as HTMLElement | null)?.closest('.traffic-lights')) return;
+  toggleMaximize();
+};
 </script>
 
 <template>
@@ -38,6 +66,7 @@ const close = () => controls?.close();
     <header
       v-if="customChrome"
       class="titlebar"
+      @dblclick="onTitleDblClick"
     >
       <div class="traffic-lights">
         <button
@@ -128,6 +157,24 @@ const close = () => controls?.close();
         </RouterView>
       </main>
     </div>
+
+    <footer class="statusbar">
+      <span class="status-left">{{ pageLabel }}</span>
+      <span class="status-right">
+        <button
+          type="button"
+          class="status-btn"
+          title="开关 Chrome DevTools"
+          aria-label="Toggle Chrome DevTools"
+          @click="toggleDevTools"
+        >
+          <Bug
+            :size="13"
+            stroke-width="2"
+          />
+        </button>
+      </span>
+    </footer>
   </div>
 </template>
 
@@ -263,4 +310,51 @@ const close = () => controls?.close();
   opacity: 0;
   transform: translateY(-2px);
 }
+
+/* Bottom status bar: current page on the left, DevTools toggle on the right. */
+.statusbar {
+  flex: 0 0 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 8px 0 12px;
+  background: rgba(0, 0, 0, 0.03);
+  border-top: 1px solid var(--hairline);
+  color: rgba(0, 0, 0, 0.55);
+  font-size: 11px;
+  user-select: none;
+}
+
+.status-left {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.status-right {
+  display: flex;
+  align-items: center;
+}
+
+.status-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.status-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.status-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+}
+
 </style>

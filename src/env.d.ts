@@ -18,9 +18,21 @@ interface WindowControlsApi {
   close(): void;
   /** Subscribe to real maximize-state changes; returns an unsubscribe fn. */
   onMaximizedChange(callback: (maximized: boolean) => void): () => void;
+  /** Open or close the Chrome DevTools (detached) for this window. */
+  toggleDevTools(): void;
+}
+
+/** Result of the folderart icon-font search bridge (see src/preload.ts). */
+interface IconfontSearchResponse {
+  status: number;
+  text: string;
+  error?: string;
 }
 
 interface Window {
   /** Present when the page runs inside Electron (see src/preload.ts). */
   windowControls?: WindowControlsApi;
+
+  /** Present inside Electron: forwards folderart's icon-font search to main. */
+  iconFontSearch?: (body: string) => Promise<IconfontSearchResponse>;
 }
