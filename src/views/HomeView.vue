@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { Settings, Wrench } from 'lucide-vue-next';
+import { PanelBottom, Settings, Wrench } from 'lucide-vue-next';
 import WidgetGrid from '../components/WidgetGrid.vue';
 
 const shortcuts = [
   { label: '小工具', desc: '管理常用小工具', path: '/tools', icon: Wrench },
   { label: '设置', desc: '偏好与应用设置', path: '/settings', icon: Settings },
+  { label: 'Overlay 示例', desc: '体验 Toast 与 Sheet', path: '/examples/overlays', icon: PanelBottom },
 ];
 </script>
 

@@ -19,7 +19,7 @@ const icons = { info: Info, success: Check, error: CircleAlert };
 </template>
 
 <style scoped>
-.toast-host { position: fixed; z-index: 50; right: 18px; bottom: 38px; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.toast-host { position: fixed; z-index: 50; top: 58px; left: 50%; display: flex; flex-direction: column; align-items: center; gap: 8px; transform: translateX(-50%); pointer-events: none; }
 .toast { display: flex; align-items: center; gap: 8px; min-width: 220px; max-width: 360px; padding: 10px 10px 10px 12px; border: 1px solid var(--hairline); border-radius: 9px; background: rgba(255, 255, 255, .82); box-shadow: 0 8px 24px rgba(0, 0, 0, .13); color: var(--text); font-size: 13px; -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); pointer-events: auto; }
 .toast svg { flex: 0 0 auto; color: var(--accent); }
 .toast.is-success svg { color: #34c759; }

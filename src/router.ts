@@ -3,6 +3,7 @@ import HomeView from './views/HomeView.vue';
 import ToolsArea from './views/ToolsArea.vue';
 import ToolsView from './views/ToolsView.vue';
 import SettingsView from './views/SettingsView.vue';
+import OverlayDemoView from './views/OverlayDemoView.vue';
 import { tools } from './config/tools';
 
 // The imported wttch-labs tools are embedded as nested routes under /tools:
@@ -31,6 +32,7 @@ export default createRouter({
       ],
     },
     { path: '/settings', name: 'settings', component: SettingsView },
+    { path: '/examples/overlays', name: 'overlay-demo', component: OverlayDemoView },
     { path: '/:pathMatch(.*)*', redirect: '/home' },
   ],
 });

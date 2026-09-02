@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { Grip, Plus, RotateCcw } from 'lucide-vue-next';
+import { Grip, Pin, PinOff, Plus, RotateCcw } from 'lucide-vue-next';
 import { widgetPlugins } from '../config/tools';
 
 const columns = 12;
 const gap = 12;
-type WidgetItem = { id: string; x: number; y: number; w: number; h: number };
+type WidgetItem = { id: string; x: number; y: number; w: number; h: number; pinned: boolean };
 const defaults: WidgetItem[] = widgetPlugins.map((plugin, index) => ({
   id: plugin.id,
   x: index * 6,
   y: 0,
   w: plugin.widget?.defaultWidth ?? 6,
   h: plugin.widget?.defaultHeight ?? 2,
+  pinned: false,
 }));
 const items = ref<WidgetItem[]>(defaults.map((item) => ({ ...item })));
 const active = ref<{ id: string; mode: 'drag' | 'resize'; startX: number; startY: number; item: WidgetItem } | null>(null);
@@ -25,6 +26,17 @@ const pluginFor = (id: string) => widgetPlugins.find((plugin) => plugin.id === i
 const minSizeFor = (id: string) => {
   const widget = pluginFor(id)?.widget;
   return { width: widget?.minWidth ?? 3, height: widget?.minHeight ?? 2 };
+};
+const normalizeItem = (item: WidgetItem): WidgetItem => {
+  const minimum = minSizeFor(item.id);
+  const width = Math.max(minimum.width, Math.min(columns, item.w));
+  return {
+    ...item,
+    x: Math.max(0, Math.min(columns - width, item.x)),
+    w: width,
+    h: Math.max(minimum.height, item.h),
+    pinned: Boolean(item.pinned),
+  };
 };
 const styleFor = (item: WidgetItem) => ({
   left: `${item.x * (cellWidth + gap)}px`,
@@ -45,7 +57,7 @@ const addWidget = (id: string) => {
   if (!plugin?.widget) return;
   const minimum = minSizeFor(id);
   const nextY = Math.max(0, ...items.value.map((item) => item.y + item.h));
-  items.value.push({ id, x: 0, y: nextY, w: Math.max(minimum.width, plugin.widget.defaultWidth), h: Math.max(minimum.height, plugin.widget.defaultHeight) });
+  items.value.push({ id, x: 0, y: nextY, w: Math.max(minimum.width, plugin.widget.defaultWidth), h: Math.max(minimum.height, plugin.widget.defaultHeight), pinned: false });
   save();
   showLibrary.value = false;
 };
@@ -55,7 +67,7 @@ const overlaps = (first: WidgetItem, second: WidgetItem) => first.x < second.x +
   && first.y + first.h > second.y;
 const hasCollision = (item: WidgetItem) => items.value.some((other) => other.id !== item.id && overlaps(item, other));
 const begin = (event: PointerEvent, item: WidgetItem, mode: 'drag' | 'resize') => {
-  if (!grid.value) return;
+  if (!grid.value || item.pinned) return;
   (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   active.value = { id: item.id, mode, startX: event.clientX, startY: event.clientY, item: { ...item } };
 };
@@ -82,6 +94,10 @@ const end = () => {
   }
   active.value = null;
 };
+const togglePin = (item: WidgetItem) => {
+  item.pinned = !item.pinned;
+  save();
+};
 
 onMounted(() => {
   const stored = localStorage.getItem(storageKey);
@@ -90,15 +106,7 @@ onMounted(() => {
     if (Array.isArray(parsed) && parsed.every((item) => item.id && item.w && item.h)) {
       items.value = parsed
         .filter((item) => pluginFor(item.id))
-        .map((item) => {
-          const minimum = minSizeFor(item.id);
-          return {
-            ...item,
-            x: Math.max(0, Math.min(columns - minimum.width, item.x)),
-            w: Math.max(minimum.width, Math.min(columns - item.x, item.w)),
-            h: Math.max(minimum.height, item.h),
-          };
-        });
+        .map(normalizeItem);
     }
   } catch { /* Ignore an invalid local layout. */ }
 });
@@ -135,7 +143,7 @@ onMounted(() => {
         class="widget card"
         :style="styleFor(item)"
       >
-        <div class="widget-drag" title="拖动 Widget" @pointerdown="begin($event, item, 'drag')"><Grip :size="15" /></div>
+        <div v-if="!item.pinned" class="widget-drag" title="拖动 Widget" @pointerdown="begin($event, item, 'drag')"><Grip :size="15" /></div>
         <component
           :is="pluginFor(item.id)?.widget?.component"
           :refresh-interval-ms="pluginFor(item.id)?.widget?.refreshIntervalMs"
@@ -144,7 +152,18 @@ onMounted(() => {
           v-if="active?.id === item.id && active.mode === 'resize'"
           class="size-indicator"
         >{{ item.w }} × {{ item.h }}</span>
-        <button class="resize" title="调整大小" type="button" @pointerdown="begin($event, item, 'resize')" />
+        <button
+          class="pin"
+          :class="{ 'is-pinned': item.pinned }"
+          :title="item.pinned ? '取消固定' : '固定当前位置'"
+          type="button"
+          @pointerdown.stop
+          @click="togglePin(item)"
+        >
+          <PinOff v-if="item.pinned" :size="14" />
+          <Pin v-else :size="14" />
+        </button>
+        <button v-if="!item.pinned" class="resize" title="调整大小" type="button" @pointerdown="begin($event, item, 'resize')" />
       </article>
     </div>
   </section>
@@ -167,6 +186,9 @@ onMounted(() => {
 .widget { position: absolute; overflow: hidden; }
 .widget-drag { position: absolute; z-index: 2; top: 8px; right: 8px; padding: 3px; color: var(--text-secondary); cursor: grab; touch-action: none; }
 .widget-drag:active { cursor: grabbing; }
+.pin { position: absolute; z-index: 2; top: 8px; right: 34px; display: inline-flex; padding: 4px; border: 0; border-radius: 5px; background: rgba(255, 255, 255, .58); color: var(--text-secondary); cursor: pointer; }
+.pin.is-pinned { right: 8px; }
+.pin:hover { color: var(--accent); }
 .resize { position: absolute; z-index: 2; right: 0; bottom: 0; width: 18px; height: 18px; border: 0; background: linear-gradient(135deg, transparent 50%, var(--accent) 50%); cursor: nwse-resize; touch-action: none; }
 .size-indicator { position: absolute; z-index: 3; right: 10px; bottom: 10px; padding: 4px 7px; border: 1px solid rgba(255, 255, 255, .7); border-radius: 5px; background: rgba(29, 29, 31, .78); color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; pointer-events: none; }
 </style>
