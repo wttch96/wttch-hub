@@ -3,6 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { Bug } from 'lucide-vue-next';
 import Sidebar from './components/Sidebar.vue';
+import SheetHost from './components/SheetHost.vue';
+import ToastHost from './components/ToastHost.vue';
 
 const appName = 'wttch-hub';
 
@@ -178,6 +180,9 @@ const onTitleDblClick = (event: MouseEvent) => {
         </button>
       </span>
     </footer>
+
+    <ToastHost />
+    <SheetHost />
   </div>
 </template>
 

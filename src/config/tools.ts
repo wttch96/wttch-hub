@@ -17,6 +17,10 @@ export interface ToolPlugin {
   tint: [string, string];
   flow?: boolean;
   component: () => Promise<{ default: Component }>;
+  capabilities?: {
+    toast?: boolean;
+    sheet?: boolean;
+  };
   widget?: {
     component: () => Promise<{ default: Component }>;
     defaultWidth: number;
@@ -80,6 +84,7 @@ export const tools: ToolPlugin[] = [
     tags: ['CPU', '内存', 'IO'],
     tint: ['#ff375f', 'rgba(255, 55, 95, 0.12)'],
     component: () => import('../tools/system-monitor/index.vue'),
+    capabilities: { toast: true, sheet: true },
     widget: {
       component: defineAsyncComponent(() => import('../tools/system-monitor/index.vue')),
       defaultWidth: 6,
@@ -98,6 +103,7 @@ export const tools: ToolPlugin[] = [
     tags: ['CPU', 'Widget'],
     tint: ['#ff375f', 'rgba(255, 55, 95, 0.12)'],
     component: () => import('../tools/system-monitor/CpuUsageWidget.vue'),
+    capabilities: { toast: true, sheet: true },
     widget: {
       component: defineAsyncComponent(() => import('../tools/system-monitor/CpuUsageWidget.vue')),
       defaultWidth: 3,
