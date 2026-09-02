@@ -28,9 +28,14 @@ const windowControls = {
   toggleDevTools: () => ipcRenderer.send('win:toggle-devtools'),
 };
 
+const systemMonitor = {
+  stats: () => ipcRenderer.invoke('system:stats'),
+};
+
 export type WindowControlsApi = typeof windowControls;
 
 contextBridge.exposeInMainWorld('windowControls', windowControls);
+contextBridge.exposeInMainWorld('systemMonitor', systemMonitor);
 
 // folderart's online icon-font search needs a same-origin proxy to iconfont.cn
 // (which sends no CORS headers). The main process forwards the POST over

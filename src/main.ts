@@ -3,6 +3,7 @@ import 'dotenv/config';
 import path from 'node:path';
 import fs from 'node:fs';
 import started from 'electron-squirrel-startup';
+import si from 'systeminformation';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -41,7 +42,27 @@ const IPC = {
   close: 'win:close',
   toggleDevTools: 'win:toggle-devtools',
   maximizedChanged: 'win:maximized-changed',
+  systemStats: 'system:stats',
 } as const;
+
+ipcMain.handle(IPC.systemStats, async () => {
+  const [load, memory, io, networkInterface] = await Promise.all([
+    si.currentLoad(),
+    si.mem(),
+    si.disksIO(),
+    si.networkInterfaceDefault(),
+  ]);
+  const network = networkInterface ? await si.networkStats(networkInterface) : [];
+  const networkStats = network[0];
+  return {
+    cpu: load.currentLoad,
+    memory: memory.used / memory.total * 100,
+    readBytes: io.rIO_sec,
+    writeBytes: io.wIO_sec,
+    downloadBytes: networkStats?.rx_sec ?? 0,
+    uploadBytes: networkStats?.tx_sec ?? 0,
+  };
+});
 
 if (CUSTOM_CHROME || MACOS_CHROME) {
   ipcMain.on(IPC.minimize, (event) => {

@@ -3,24 +3,11 @@ import HomeView from './views/HomeView.vue';
 import ToolsArea from './views/ToolsArea.vue';
 import ToolsView from './views/ToolsView.vue';
 import SettingsView from './views/SettingsView.vue';
-import type { Component } from 'vue';
+import { tools } from './config/tools';
 
 // The imported wttch-labs tools are embedded as nested routes under /tools:
 // /tools is the tool-library page, each tool opens on its own child route so the
 // sidebar keeps its three top-level entries (主页 / 小工具 / 设置).
-const tool = (
-  path: string,
-  name: string,
-  title: string,
-  loader: () => Promise<{ default: Component }>,
-  flow = false,
-) => ({
-  path,
-  name,
-  meta: { tool: true, title, flow },
-  component: loader,
-});
-
 // `createWebHashHistory` is used so routing keeps working when the packaged
 // app is loaded from the filesystem (file://) instead of a dev server.
 export default createRouter({
@@ -35,33 +22,12 @@ export default createRouter({
       component: ToolsArea,
       children: [
         { path: '', name: 'tools', component: ToolsView },
-        tool(
-          'folderart',
-          'tool-folderart',
-          '图标生成器',
-          () => import('./tools/folderart/index.vue'),
-        ),
-        tool(
-          'packetdraw',
-          'tool-packetdraw',
-          '协议绘制器',
-          () => import('./tools/packetdraw/index.vue'),
-          true, // whole-page scroll
-        ),
-        tool(
-          'radixconv',
-          'tool-radixconv',
-          '进制转换器',
-          () => import('./tools/radixconv/index.vue'),
-          true, // whole-page scroll, not a fixed paned editor
-        ),
-        tool(
-          'bitparser',
-          'tool-bitparser',
-          '位段解析器',
-          () => import('./tools/bitparser/index.vue'),
-          true, // whole-page scroll
-        ),
+        ...tools.map((plugin) => ({
+          path: plugin.path,
+          name: `tool-${plugin.id}`,
+          meta: { tool: true, title: plugin.name, flow: plugin.flow ?? false },
+          component: plugin.component,
+        })),
       ],
     },
     { path: '/settings', name: 'settings', component: SettingsView },

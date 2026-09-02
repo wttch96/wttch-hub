@@ -1,60 +1,7 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router';
-import {
-  Binary,
-  Braces,
-  ChevronRight,
-  FolderOpen,
-  Network,
-  Sparkles,
-} from 'lucide-vue-next';
-import type { Component } from 'vue';
-
-interface ToolCard {
-  to: string;
-  name: string;
-  icon: Component;
-  desc: string;
-  tags: string[];
-  /** [icon color, tile background tint] */
-  tint: [string, string];
-}
-
-// The imported wttch-labs tools. Cards open the nested /tools/<tool> routes.
-const tools: ToolCard[] = [
-  {
-    to: '/tools/folderart',
-    name: '图标生成器',
-    icon: FolderOpen,
-    desc: '把一张图片变成 macOS / Windows 风格的文件夹图标，支持多套模板样式与 PNG 导出。',
-    tags: ['图标', 'PNG'],
-    tint: ['#0a84ff', 'rgba(10, 132, 255, 0.12)'],
-  },
-  {
-    to: '/tools/packetdraw',
-    name: '协议绘制器',
-    icon: Network,
-    desc: '用简单文本描述一次网络交互，渲染成协议 / 时序图，方便写文档和做演示。',
-    tags: ['时序', '文本转图'],
-    tint: ['#bf5af2', 'rgba(191, 90, 242, 0.12)'],
-  },
-  {
-    to: '/tools/radixconv',
-    name: '进制转换器',
-    icon: Binary,
-    desc: '在二进制 / 八进制 / 十进制 / 十六进制之间互转，支持大数与位运算解释。',
-    tags: ['进制', '位运算'],
-    tint: ['#34c759', 'rgba(52, 199, 89, 0.12)'],
-  },
-  {
-    to: '/tools/bitparser',
-    name: '位段解析器',
-    icon: Braces,
-    desc: '按字段宽度定义位段布局，把二进制报文逐位解析成可读的字段清单。',
-    tags: ['位段', '报文'],
-    tint: ['#ff9f0a', 'rgba(255, 159, 10, 0.13)'],
-  },
-];
+import { ChevronRight, Sparkles } from 'lucide-vue-next';
+import { tools } from '../config/tools';
 </script>
 
 <template>
@@ -69,8 +16,8 @@ const tools: ToolCard[] = [
     <div class="grid">
       <RouterLink
         v-for="tool in tools"
-        :key="tool.to"
-        :to="tool.to"
+        :key="tool.id"
+        :to="`/tools/${tool.path}`"
         class="card tool-card"
       >
         <span

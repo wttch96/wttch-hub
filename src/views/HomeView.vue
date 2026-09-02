@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Settings, Wrench } from 'lucide-vue-next';
+import WidgetGrid from '../components/WidgetGrid.vue';
 
 const shortcuts = [
   { label: '小工具', desc: '管理常用小工具', path: '/tools', icon: Wrench },
@@ -42,6 +43,8 @@ const shortcuts = [
         </div>
       </RouterLink>
     </div>
+
+    <WidgetGrid />
   </section>
 </template>
 
