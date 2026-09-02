@@ -1,10 +1,10 @@
 :root {
   color-scheme: light;
   --accent: #0a84ff;
-  --window-bg: #f2f2f3;
-  --content-bg: #f2f2f3;
+  --window-bg: rgba(242, 242, 243, 0.72);
+  --content-bg: rgba(242, 242, 243, 0.58);
   --sidebar-bg: rgba(0, 0, 0, 0.05);
-  --card-bg: #ffffff;
+  --card-bg: rgba(255, 255, 255, 0.58);
   --hairline: rgba(0, 0, 0, 0.08);
   --text: #1d1d1f;
   --text-secondary: #6e6e73;

@@ -42,6 +42,7 @@
   },
   "dependencies": {
     "antlr4ng": "^3.0.16",
+    "dotenv": "^17.4.2",
     "electron-squirrel-startup": "^1.0.1",
     "lucide-vue-next": "^1.0.0",
     "vue": "^3.5.42",

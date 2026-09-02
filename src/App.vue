@@ -21,11 +21,11 @@ const pageLabel = computed(() => {
   return byName[String(route.name)] ?? String(route.name ?? '');
 });
 
-// Custom chrome is drawn only on Windows (see src/main.ts); on macOS/Linux the
-// OS provides the native frame and its own window controls, so we render a
-// plain page underneath.
+// Windows draws all controls in the renderer. macOS keeps native traffic lights
+// but uses the renderer for the shared translucent titlebar surface.
 const controls = window.windowControls;
 const customChrome = controls?.platform === 'win32';
+const macOS = controls?.platform === 'darwin';
 
 const isMaximized = ref(false);
 let unsubscribe: (() => void) | undefined;
@@ -60,15 +60,18 @@ const onTitleDblClick = (event: MouseEvent) => {
 <template>
   <div
     class="window"
-    :class="{ 'is-custom': customChrome, 'is-maximized': isMaximized }"
+    :class="{ 'is-custom': customChrome, 'is-macos': macOS, 'is-maximized': isMaximized }"
   >
-    <!-- macOS-style title bar, only drawn when there is no native frame -->
+    <!-- macOS uses native traffic lights over this draggable titlebar. -->
     <header
-      v-if="customChrome"
+      v-if="customChrome || macOS"
       class="titlebar"
       @dblclick="onTitleDblClick"
     >
-      <div class="traffic-lights">
+      <div
+        v-if="customChrome"
+        class="traffic-lights"
+      >
         <button
           type="button"
           class="tl close"
@@ -188,6 +191,13 @@ const onTitleDblClick = (event: MouseEvent) => {
   color: var(--text);
 }
 
+.window.is-macos {
+  --window-bg: rgba(242, 242, 243, 0.54);
+  --content-bg: rgba(242, 242, 243, 0.42);
+  --card-bg: rgba(255, 255, 255, 0.48);
+  --sidebar-bg: rgba(255, 255, 255, 0.18);
+}
+
 /* The window is transparent; rounding the root makes an irregular shape. */
 .window.is-custom {
   border-radius: 12px;
@@ -205,8 +215,16 @@ const onTitleDblClick = (event: MouseEvent) => {
   /* Whole bar can move the window; the buttons below opt back out. */
   -webkit-app-region: drag;
   user-select: none;
-  background: rgba(0, 0, 0, 0.035);
+  background: rgba(242, 242, 243, 0.42);
+  -webkit-backdrop-filter: blur(22px) saturate(125%);
+  backdrop-filter: blur(22px) saturate(125%);
   border-bottom: 1px solid var(--hairline);
+}
+
+.window.is-macos .titlebar {
+  padding-left: 76px;
+  padding-right: 76px;
+  background: rgba(242, 242, 243, 0.34);
 }
 
 .title {
@@ -293,6 +311,8 @@ const onTitleDblClick = (event: MouseEvent) => {
   min-width: 0;
   overflow-y: auto;
   background: var(--content-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(125%);
+  backdrop-filter: blur(22px) saturate(125%);
 }
 
 /* Snappy macOS-style page transition. */
