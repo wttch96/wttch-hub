@@ -41,7 +41,10 @@
     "vue-eslint-parser": "^9.4.3"
   },
   "dependencies": {
+    "antlr4ng": "^3.0.16",
     "electron-squirrel-startup": "^1.0.1",
-    "vue": "^3.5.42"
+    "lucide-vue-next": "^1.0.0",
+    "vue": "^3.5.42",
+    "vue-router": "^4.6.4"
   }
 }

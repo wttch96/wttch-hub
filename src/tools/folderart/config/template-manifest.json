@@ -1,0 +1,192 @@
+{
+  "styles": [
+    {
+      "id": "folder-tahoe",
+      "label": "文件夹 · macOS 26",
+      "kind": "folder",
+      "constraints": {
+        "maxWidth": 860,
+        "maxHeight": 480,
+        "preferredSize": 384,
+        "faceHeight": 480,
+        "startY": 300,
+        "labelBaselineY": 620,
+        "textMaxWidth": 740,
+        "shadow": true
+      },
+      "variants": [
+        { "id": "blue", "label": "蓝色", "bodyColor": "#0A84FF" },
+        { "id": "green", "label": "绿色", "bodyColor": "#34C759" },
+        { "id": "yellow", "label": "黄色", "bodyColor": "#FFD60A" },
+        { "id": "purple", "label": "紫色", "bodyColor": "#BF5AF2" },
+        { "id": "red", "label": "红色", "bodyColor": "#FF453A" },
+        { "id": "teal", "label": "青色", "bodyColor": "#40C8E0" }
+      ]
+    },
+    {
+      "id": "folder-bigsur",
+      "label": "文件夹 · 经典 Big Sur",
+      "kind": "folder",
+      "constraints": {
+        "maxWidth": 768,
+        "maxHeight": 604,
+        "preferredSize": 384,
+        "faceHeight": 604,
+        "startY": 258,
+        "labelBaselineY": 580,
+        "textMaxWidth": 650,
+        "shadow": true
+      },
+      "variants": [
+        { "id": "blue", "label": "蓝色", "bodyColor": "#0A84FF" },
+        { "id": "green", "label": "绿色", "bodyColor": "#34C759" },
+        { "id": "yellow", "label": "黄色", "bodyColor": "#FFD60A" },
+        { "id": "purple", "label": "紫色", "bodyColor": "#BF5AF2" },
+        { "id": "red", "label": "红色", "bodyColor": "#FF453A" },
+        { "id": "teal", "label": "青色", "bodyColor": "#40C8E0" }
+      ]
+    },
+    {
+      "id": "folder-classic",
+      "label": "文件夹 · 经典彩色",
+      "kind": "folder",
+      "constraints": {
+        "maxWidth": 768,
+        "maxHeight": 604,
+        "preferredSize": 384,
+        "faceHeight": 604,
+        "startY": 258,
+        "labelBaselineY": 580,
+        "textMaxWidth": 650,
+        "shadow": true
+      },
+      "variants": [
+        { "id": "black", "label": "黑色", "bodyColor": "#1D1D1F", "base": "https://raw.githubusercontent.com/christianvmm/folderart/main/public/folders/mac-os/mac-os-black.png" },
+        { "id": "dark", "label": "深蓝", "bodyColor": "#3A6EA5", "base": "https://raw.githubusercontent.com/christianvmm/folderart/main/public/folders/mac-os/mac-os-default-dark.png" },
+        { "id": "light", "label": "经典蓝", "bodyColor": "#2573C2", "base": "https://raw.githubusercontent.com/christianvmm/folderart/main/public/folders/mac-os/mac-os-default-light.png" },
+        { "id": "gray", "label": "灰色", "bodyColor": "#9AA0A6", "base": "https://raw.githubusercontent.com/christianvmm/folderart/main/public/folders/mac-os/mac-os-gray.png" },
+        { "id": "green", "label": "绿色", "bodyColor": "#34C759", "base": "https://raw.githubusercontent.com/christianvmm/folderart/main/public/folders/mac-os/mac-os-green.png" },
+        { "id": "lime", "label": "青柠", "bodyColor": "#A9D417", "base": "https://raw.githubusercontent.com/christianvmm/folderart/main/public/folders/mac-os/mac-os-lime.png" },
+        { "id": "orange", "label": "橙色", "bodyColor": "#FF9500", "base": "https://raw.githubusercontent.com/christianvmm/folderart/main/public/folders/mac-os/mac-os-orange.png" },
+        { "id": "purple", "label": "紫色", "bodyColor": "#BF5AF2", "base": "https://raw.githubusercontent.com/christianvmm/folderart/main/public/folders/mac-os/mac-os-purple.png" },
+        { "id": "red", "label": "红色", "bodyColor": "#FF453A", "base": "https://raw.githubusercontent.com/christianvmm/folderart/main/public/folders/mac-os/mac-os-red.png" },
+        { "id": "yellow", "label": "黄色", "bodyColor": "#FFD60A", "base": "https://raw.githubusercontent.com/christianvmm/folderart/main/public/folders/mac-os/mac-os-yellow.png" }
+      ]
+    },
+    {
+      "id": "folder-windows11",
+      "label": "文件夹 · Windows 11",
+      "kind": "folder",
+      "constraints": {
+        "maxWidth": 700,
+        "maxHeight": 520,
+        "preferredSize": 384,
+        "faceHeight": 560,
+        "startY": 260,
+        "labelBaselineY": 770,
+        "textMaxWidth": 500,
+        "shadow": true
+      },
+      "variants": [
+        { "id": "default", "label": "黄色", "bodyColor": "#FFC83D", "base": "https://raw.githubusercontent.com/christianvmm/folderart/main/public/folders/windows-11/windows-11-default.png" },
+        { "id": "pink", "label": "粉色", "bodyColor": "#F78FB3", "base": "https://raw.githubusercontent.com/christianvmm/folderart/main/public/folders/windows-11/windows-11-pink.png" }
+      ]
+    },
+    {
+      "id": "drive-external",
+      "label": "硬盘 · 外置",
+      "kind": "drive",
+      "tilt": -10,
+      "constraints": {
+        "maxWidth": 600,
+        "maxHeight": 550,
+        "preferredSize": 384,
+        "faceHeight": 700,
+        "startY": 50,
+        "labelBaselineY": 480,
+        "textMaxWidth": 460,
+        "shadow": false
+      },
+      "variants": [
+        { "id": "gold", "label": "金色", "bodyColor": "#F7B500" },
+        { "id": "silver", "label": "银色", "bodyColor": "#C7D5DD" },
+        { "id": "green", "label": "绿色", "bodyColor": "#30B061" },
+        { "id": "purple", "label": "紫色", "bodyColor": "#A85DE0" },
+        { "id": "red", "label": "红色", "bodyColor": "#E5433F" },
+        { "id": "teal", "label": "青色", "bodyColor": "#2FB4CC" }
+      ]
+    },
+    {
+      "id": "drive-removable",
+      "label": "硬盘 · 移动",
+      "kind": "drive",
+      "tilt": -10,
+      "constraints": {
+        "maxWidth": 600,
+        "maxHeight": 550,
+        "preferredSize": 384,
+        "faceHeight": 700,
+        "startY": 50,
+        "labelBaselineY": 480,
+        "textMaxWidth": 460,
+        "shadow": false
+      },
+      "variants": [
+        { "id": "silver", "label": "银色", "bodyColor": "#C7D5DD" },
+        { "id": "gold", "label": "金色", "bodyColor": "#F7B500" },
+        { "id": "green", "label": "绿色", "bodyColor": "#30B061" },
+        { "id": "purple", "label": "紫色", "bodyColor": "#A85DE0" },
+        { "id": "red", "label": "红色", "bodyColor": "#E5433F" },
+        { "id": "teal", "label": "青色", "bodyColor": "#2FB4CC" }
+      ]
+    },
+    {
+      "id": "drive-time-machine",
+      "label": "硬盘 · 时间机器",
+      "kind": "drive",
+      "tilt": -10,
+      "constraints": {
+        "maxWidth": 600,
+        "maxHeight": 550,
+        "preferredSize": 384,
+        "faceHeight": 550,
+        "startY": 46,
+        "labelBaselineY": 430,
+        "textMaxWidth": 420,
+        "shadow": false
+      },
+      "variants": [
+        { "id": "teal", "label": "青色", "bodyColor": "#3C8C88" },
+        { "id": "gold", "label": "金色", "bodyColor": "#F7B500" },
+        { "id": "green", "label": "绿色", "bodyColor": "#30B061" },
+        { "id": "purple", "label": "紫色", "bodyColor": "#A85DE0" },
+        { "id": "red", "label": "红色", "bodyColor": "#E5433F" },
+        { "id": "silver", "label": "银色", "bodyColor": "#C7D5DD" }
+      ]
+    },
+    {
+      "id": "drive-file-server",
+      "label": "服务器 · 文件",
+      "kind": "drive",
+      "tilt": -10,
+      "constraints": {
+        "maxWidth": 600,
+        "maxHeight": 550,
+        "preferredSize": 384,
+        "faceHeight": 550,
+        "startY": 46,
+        "labelBaselineY": 430,
+        "textMaxWidth": 420,
+        "shadow": false
+      },
+      "variants": [
+        { "id": "slate", "label": "石板蓝", "bodyColor": "#46505C" },
+        { "id": "gold", "label": "金色", "bodyColor": "#F7B500" },
+        { "id": "green", "label": "绿色", "bodyColor": "#30B061" },
+        { "id": "purple", "label": "紫色", "bodyColor": "#A85DE0" },
+        { "id": "red", "label": "红色", "bodyColor": "#E5433F" },
+        { "id": "teal", "label": "青色", "bodyColor": "#2FB4CC" }
+      ]
+    }
+  ]
+}

@@ -34,5 +34,18 @@
       }
     }
   ],
-  "ignorePatterns": [".vite", "dist", "out"]
+  "rules": {
+    // Imported wttch-labs tools resolve shared code through the '@' alias, which
+    // this import resolver cannot see; treat those paths as resolved.
+    "import/no-unresolved": ["error", { "ignore": ["^@/"] }],
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_"
+      }
+    ]
+  },
+  "ignorePatterns": [".vite", "dist", "out", "src/tools/packetdraw/antlr"]
 }
