@@ -15,6 +15,7 @@ type PluginPackageInfo = {
   file: string;
   capabilities?: string[];
 };
+type PluginBundle = { apiVersion: number; plugins: Omit<PluginPackageInfo, 'file'>[] };
 
 const loadPluginPackages = (): PluginPackageInfo[] => {
   const pluginsDir = path.join(process.cwd(), 'plugins');
@@ -26,9 +27,11 @@ const loadPluginPackages = (): PluginPackageInfo[] => {
         const archive = unzipSync(new Uint8Array(fs.readFileSync(path.join(pluginsDir, file))));
         const packageFile = archive['package.json'];
         if (!packageFile) return [];
-        const manifest = JSON.parse(strFromU8(packageFile)) as Omit<PluginPackageInfo, 'file'>;
-        if (manifest.apiVersion !== 1 || !manifest.id || !manifest.version || !manifest.name || !manifest.entry) return [];
-        return [{ ...manifest, file: path.join('plugins', file) }];
+        const bundle = JSON.parse(strFromU8(packageFile)) as PluginBundle;
+        if (bundle.apiVersion !== 1 || !Array.isArray(bundle.plugins)) return [];
+        return bundle.plugins
+          .filter((plugin) => plugin.apiVersion === 1 && plugin.id && plugin.version && plugin.name && plugin.entry)
+          .map((plugin) => ({ ...plugin, file: path.join('plugins', file) }));
       } catch (error) {
         console.warn(`[plugins] ignored ${file}: ${error instanceof Error ? error.message : String(error)}`);
         return [];

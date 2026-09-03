@@ -90,3 +90,6 @@ typings/
 
 # Electron-Forge
 out/
+
+# Generated plugin bundles and installed development type snapshots
+plugins/*.zip

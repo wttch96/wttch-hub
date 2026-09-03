@@ -1,5 +1,5 @@
 import { Cpu } from 'lucide-vue-next';
-import { defineToolPlugin } from '../../types/plugin';
+import { defineToolPlugin } from '@wttch-hub/plugin-api';
 
 export default defineToolPlugin({
   apiVersion: 1,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Activity, Cpu, HardDrive, MemoryStick, Monitor, Wifi } from 'lucide-vue-next';
-import type { SystemStats } from '../../../types/plugin';
+import type { SystemStats } from '@wttch-hub/plugin-api';
 
 type Stats = SystemStats;
 const stats = ref<Stats>({ cpu: 0, memory: 0, gpu: 0, readBytes: 0, writeBytes: 0, downloadBytes: 0, uploadBytes: 0 });

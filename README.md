@@ -30,7 +30,7 @@
 
 工具通过 `src/types/plugin.ts` 中版本化的 `ToolPlugin` API 声明（当前 `apiVersion: 1`）。内置工具注册在 `src/config/tools.ts`；放入 `src/plugins/<id>/index.ts` 的插件会由 `import.meta.glob` 自动发现，并按声明生成工具路由、主页 Widget 和 statusbar。插件组件通过 `window.toolHost` 使用宿主能力，例如 `window.toolHost?.systemStats()`，不直接访问 Electron IPC。
 
-当前系统监控源码位于 `src/plugins/system-monitor/`，同时提供系统监控页面与 CPU / GPU Widget，作为外置插件示例。每个插件目录必须有 `package.ts`，运行 `npm run package:plugins` 会生成 `plugins/<id>-<version>.zip`；`npm run package` 会自动执行这一步。Electron 启动时会扫描工作目录的 `plugins/*.zip`，解析并校验包定义，通过 `window.toolHost.pluginPackages()` 提供已识别的插件包信息。
+当前系统监控源码位于 `src/plugins/system-monitor/`，同时提供系统监控页面与 CPU / GPU Widget，作为外置插件示例。插件包定义写在各自的 `package.ts` 中；运行 `npm run install:plugin-api` 会先卸载旧版本，再将最新的 `@wttch-hub/plugin-api` 安装到 `node_modules`，插件通过包名直接导入宿主 API 类型和定义函数。插件集合 ZIP 由独立的外部打包流程生成，`npm run install:plugins` 可将集合包整体安装或更新到 `src/plugins/`。Electron 启动时会扫描插件集合 ZIP，解析并校验包定义，通过 `window.toolHost.pluginPackages()` 提供已识别的插件包信息。
 
 ## 快速开始
 
@@ -50,6 +50,38 @@ npm start
 | `npm run make` | 生成平台安装包 |
 | `npm run publish` | 发布 |
 | `npm run lint` | ESLint 检查（`.ts` / `.tsx` / `.vue`） |
+
+### 插件开发流程
+
+插件 API 的唯一源定义是 `src/types/plugin.ts`。插件开发前先运行：
+
+```bash
+npm install
+npm run install:plugin-api
+```
+
+`install:plugin-api` 会读取宿主的 TypeScript API 定义，在系统临时目录生成 npm package，先卸载旧的 `@wttch-hub/plugin-api`，再安装新版本到 `node_modules`。它不会把类型文件复制到 `src/plugins`，也不会修改宿主的 `package.json`。
+
+插件源码放在 `src/plugins/<plugin-id>/`，入口通常是 `index.ts`，包信息写在同目录的 `package.ts`：
+
+```ts
+import {
+  definePluginPackage,
+} from '@wttch-hub/plugin-api';
+
+export default definePluginPackage({
+  apiVersion: 1,
+  id: 'example-tool',
+  version: '1.0.0',
+  name: '示例工具',
+  entry: 'index.ts',
+  capabilities: ['widget', 'statusbar'],
+});
+```
+
+工具入口在同一个目录中使用 `defineToolPlugin(...)` 导出。宿主会自动扫描 `src/plugins`，并根据声明生成工具路由、Widget、状态栏和设置入口。插件需要系统数据时，通过 `window.toolHost` 使用宿主能力，不要直接导入 Electron 或访问 IPC。
+
+插件 API 更新后，重新运行 `npm run install:plugin-api`；开发服务器需要重启才能重新解析依赖。插件的启用状态和配置由宿主设置页管理，路由切换时宿主会执行插件事件回调返回的 cleanup 函数。
 
 ### 开发诊断
 
