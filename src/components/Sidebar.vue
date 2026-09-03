@@ -5,6 +5,7 @@ import {
   Home,
   PanelLeftClose,
   PanelLeftOpen,
+  Puzzle,
   Settings,
   Wrench,
 } from 'lucide-vue-next';
@@ -18,6 +19,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: '主页', path: '/home', icon: Home },
   { label: '小工具', path: '/tools', icon: Wrench },
+  { label: '插件', path: '/plugins', icon: Puzzle },
   { label: '设置', path: '/settings', icon: Settings },
 ];
 

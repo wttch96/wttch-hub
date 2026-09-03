@@ -1,38 +1,14 @@
-import { defineAsyncComponent, type Component } from 'vue';
 import {
   Binary,
   Braces,
-  Cpu,
   FolderOpen,
   Network,
 } from 'lucide-vue-next';
+import type { ToolPlugin } from '../types/plugin';
 
-export interface ToolPlugin {
-  id: string;
-  path: string;
-  name: string;
-  icon: Component;
-  desc: string;
-  tags: string[];
-  tint: [string, string];
-  flow?: boolean;
-  component: () => Promise<{ default: Component }>;
-  capabilities?: {
-    toast?: boolean;
-    sheet?: boolean;
-  };
-  widget?: {
-    component: () => Promise<{ default: Component }>;
-    defaultWidth: number;
-    defaultHeight: number;
-    minWidth?: number;
-    minHeight?: number;
-    refreshIntervalMs: number;
-  };
-}
-
-export const tools: ToolPlugin[] = [
+const builtinTools: ToolPlugin[] = [
   {
+    apiVersion: 1,
     id: 'folderart',
     path: 'folderart',
     name: '图标生成器',
@@ -43,6 +19,7 @@ export const tools: ToolPlugin[] = [
     component: () => import('../tools/folderart/index.vue'),
   },
   {
+    apiVersion: 1,
     id: 'packetdraw',
     path: 'packetdraw',
     name: '协议绘制器',
@@ -54,6 +31,7 @@ export const tools: ToolPlugin[] = [
     component: () => import('../tools/packetdraw/index.vue'),
   },
   {
+    apiVersion: 1,
     id: 'radixconv',
     path: 'radixconv',
     name: '进制转换器',
@@ -65,6 +43,7 @@ export const tools: ToolPlugin[] = [
     component: () => import('../tools/radixconv/index.vue'),
   },
   {
+    apiVersion: 1,
     id: 'bitparser',
     path: 'bitparser',
     name: '位段解析器',
@@ -75,44 +54,19 @@ export const tools: ToolPlugin[] = [
     flow: true,
     component: () => import('../tools/bitparser/index.vue'),
   },
-  {
-    id: 'system-monitor',
-    path: 'system-monitor',
-    name: '系统监控',
-    icon: Cpu,
-    desc: '实时查看 CPU、内存和磁盘 IO，快速掌握当前机器状态。',
-    tags: ['CPU', '内存', 'IO'],
-    tint: ['#ff375f', 'rgba(255, 55, 95, 0.12)'],
-    component: () => import('../tools/system-monitor/index.vue'),
-    capabilities: { toast: true, sheet: true },
-    widget: {
-      component: defineAsyncComponent(() => import('../tools/system-monitor/index.vue')),
-      defaultWidth: 6,
-      defaultHeight: 2,
-      minWidth: 3,
-      minHeight: 2,
-      refreshIntervalMs: 2000,
-    },
-  },
-  {
-    id: 'cpu-usage',
-    path: 'cpu-usage',
-    name: 'CPU 使用率',
-    icon: Cpu,
-    desc: '在主页显示实时 CPU 使用率。',
-    tags: ['CPU', 'Widget'],
-    tint: ['#ff375f', 'rgba(255, 55, 95, 0.12)'],
-    component: () => import('../tools/system-monitor/CpuUsageWidget.vue'),
-    capabilities: { toast: true, sheet: true },
-    widget: {
-      component: defineAsyncComponent(() => import('../tools/system-monitor/CpuUsageWidget.vue')),
-      defaultWidth: 3,
-      defaultHeight: 2,
-      minWidth: 3,
-      minHeight: 2,
-      refreshIntervalMs: 2000,
-    },
-  },
+];
+
+// Plugin entry points are discovered at build time. Their page and widget
+// components remain lazy, so adding a directory under /plugins is enough to
+// make a plugin available to routes and the home widget library.
+const externalPlugins = import.meta.glob('../plugins/*/index.ts', {
+  eager: true,
+  import: 'default',
+}) as Record<string, ToolPlugin>;
+
+export const tools: ToolPlugin[] = [
+  ...builtinTools,
+  ...Object.values(externalPlugins),
 ];
 
 export const widgetPlugins = tools.filter((tool) => tool.widget);

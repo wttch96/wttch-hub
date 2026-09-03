@@ -22,15 +22,6 @@ interface WindowControlsApi {
   toggleDevTools(): void;
 }
 
-interface SystemStats {
-  cpu: number;
-  memory: number;
-  readBytes: number;
-  writeBytes: number;
-  downloadBytes: number;
-  uploadBytes: number;
-}
-
 /** Result of the folderart icon-font search bridge (see src/preload.ts). */
 interface IconfontSearchResponse {
   status: number;
@@ -41,7 +32,10 @@ interface IconfontSearchResponse {
 interface Window {
   /** Present when the page runs inside Electron (see src/preload.ts). */
   windowControls?: WindowControlsApi;
-  systemMonitor?: { stats(): Promise<SystemStats> };
+  toolHost?: {
+    systemStats(): Promise<import('./types/plugin').SystemStats>;
+    pluginPackages(): Promise<import('./types/plugin').PluginPackageInfo[]>;
+  };
 
   /** Present inside Electron: forwards folderart's icon-font search to main. */
   iconFontSearch?: (body: string) => Promise<IconfontSearchResponse>;

@@ -4,6 +4,7 @@ import ToolsArea from './views/ToolsArea.vue';
 import ToolsView from './views/ToolsView.vue';
 import SettingsView from './views/SettingsView.vue';
 import OverlayDemoView from './views/OverlayDemoView.vue';
+import PluginsView from './views/PluginsView.vue';
 import { tools } from './config/tools';
 
 // The imported wttch-labs tools are embedded as nested routes under /tools:
@@ -26,12 +27,18 @@ export default createRouter({
         ...tools.map((plugin) => ({
           path: plugin.path,
           name: `tool-${plugin.id}`,
-          meta: { tool: true, title: plugin.name, flow: plugin.flow ?? false },
+          meta: {
+            tool: true,
+            title: plugin.name,
+            flow: plugin.flow ?? false,
+            statusbar: plugin.statusbar,
+          },
           component: plugin.component,
         })),
       ],
     },
     { path: '/settings', name: 'settings', component: SettingsView },
+    { path: '/plugins', name: 'plugins', component: PluginsView },
     { path: '/examples/overlays', name: 'overlay-demo', component: OverlayDemoView },
     { path: '/:pathMatch(.*)*', redirect: '/home' },
   ],

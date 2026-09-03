@@ -26,6 +26,12 @@
 - `lucide-vue-next`（图标）
 - 工具侧：`antlr4ng`（packetdraw 语法运行时）、`public/templates/`（folderart 的 48 张模板 PNG，约 26MB）
 
+## 插件
+
+工具通过 `src/types/plugin.ts` 中版本化的 `ToolPlugin` API 声明（当前 `apiVersion: 1`）。内置工具注册在 `src/config/tools.ts`；放入 `src/plugins/<id>/index.ts` 的插件会由 `import.meta.glob` 自动发现，并按声明生成工具路由、主页 Widget 和 statusbar。插件组件通过 `window.toolHost` 使用宿主能力，例如 `window.toolHost?.systemStats()`，不直接访问 Electron IPC。
+
+当前系统监控源码位于 `src/plugins/system-monitor/`，同时提供系统监控页面与 CPU / GPU Widget，作为外置插件示例。每个插件目录必须有 `package.ts`，运行 `npm run package:plugins` 会生成 `plugins/<id>-<version>.zip`；`npm run package` 会自动执行这一步。Electron 启动时会扫描工作目录的 `plugins/*.zip`，解析并校验包定义，通过 `window.toolHost.pluginPackages()` 提供已识别的插件包信息。
+
 ## 快速开始
 
 ```bash
@@ -63,7 +69,10 @@ src/
   config/labs-styles.css   # 从 wttch-labs 引入的工具全局样式（须先于 index.css）
   components/Sidebar.vue
   views/             # HomeView / ToolsArea / ToolsView / SettingsView
-  tools/             # 从 wttch-labs 移植的四个工具源码
+  tools/             # 从 wttch-labs 移植的四个内置工具源码
+plugins/             # 生成的插件 ZIP，仅用于分发和运行时扫描
+src/plugins/
+  system-monitor/    # 外置插件源码：CPU / GPU / 内存 / IO 监控
   lib/  types/  composables/   # 工具共享代码（含空桩 useSiteFooter）
 public/templates/    # folderart 模板 PNG（构建期原样复制到产物）
 ```

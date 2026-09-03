@@ -4,6 +4,39 @@ import path from 'node:path';
 import fs from 'node:fs';
 import started from 'electron-squirrel-startup';
 import si from 'systeminformation';
+import { strFromU8, unzipSync } from 'fflate';
+
+type PluginPackageInfo = {
+  apiVersion: number;
+  id: string;
+  version: string;
+  name: string;
+  entry: string;
+  file: string;
+  capabilities?: string[];
+};
+
+const loadPluginPackages = (): PluginPackageInfo[] => {
+  const pluginsDir = path.join(process.cwd(), 'plugins');
+  if (!fs.existsSync(pluginsDir)) return [];
+  return fs.readdirSync(pluginsDir)
+    .filter((file) => file.endsWith('.zip'))
+    .flatMap((file) => {
+      try {
+        const archive = unzipSync(new Uint8Array(fs.readFileSync(path.join(pluginsDir, file))));
+        const packageFile = archive['package.json'];
+        if (!packageFile) return [];
+        const manifest = JSON.parse(strFromU8(packageFile)) as Omit<PluginPackageInfo, 'file'>;
+        if (manifest.apiVersion !== 1 || !manifest.id || !manifest.version || !manifest.name || !manifest.entry) return [];
+        return [{ ...manifest, file: path.join('plugins', file) }];
+      } catch (error) {
+        console.warn(`[plugins] ignored ${file}: ${error instanceof Error ? error.message : String(error)}`);
+        return [];
+      }
+    });
+};
+
+const pluginPackages = loadPluginPackages();
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -43,7 +76,10 @@ const IPC = {
   toggleDevTools: 'win:toggle-devtools',
   maximizedChanged: 'win:maximized-changed',
   systemStats: 'system:stats',
+  pluginPackages: 'plugins:list',
 } as const;
+
+ipcMain.handle(IPC.pluginPackages, () => pluginPackages);
 
 ipcMain.handle(IPC.systemStats, async () => {
   const [load, memory, io, networkInterface] = await Promise.all([
@@ -52,10 +88,13 @@ ipcMain.handle(IPC.systemStats, async () => {
     si.disksIO(),
     si.networkInterfaceDefault(),
   ]);
+  const graphics = await si.graphics();
   const network = networkInterface ? await si.networkStats(networkInterface) : [];
   const networkStats = network[0];
   return {
     cpu: load.currentLoad,
+    gpu: graphics.controllers.reduce((total, controller) => total + (controller.utilizationGpu ?? 0), 0) /
+      Math.max(1, graphics.controllers.length),
     memory: memory.used / memory.total * 100,
     readBytes: io.rIO_sec,
     writeBytes: io.wIO_sec,

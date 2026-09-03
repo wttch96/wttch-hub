@@ -13,12 +13,15 @@ const route = useRoute();
 // The bottom status bar names where you are; its right-hand debug button toggles
 // the Chrome DevTools (opened detached so the custom window keeps its shape).
 const pageLabel = computed(() => {
+  const statusbar = route.meta?.statusbar as { label?: string } | undefined;
+  if (statusbar?.label) return statusbar.label;
   const title = route.meta?.title as string | undefined;
   if (route.meta?.tool && title) return `小工具 · ${title}`;
   const byName: Record<string, string> = {
     home: '主页',
     tools: '工具库',
     settings: '设置',
+    plugins: '插件',
   };
   return byName[String(route.name)] ?? String(route.name ?? '');
 });

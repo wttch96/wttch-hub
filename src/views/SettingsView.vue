@@ -1,11 +1,40 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { ChevronRight } from 'lucide-vue-next';
+import { tools } from '../config/tools';
 
 // UI 骨架阶段的占位开关，后续再接到真实的持久化配置上。
 const startOnHome = ref(true);
 const launchToTray = ref(false);
 const autoCheckUpdate = ref(true);
+const pluginEnabled = ref<Record<string, boolean>>({});
+const pluginValues = ref<Record<string, Record<string, boolean | number | string>>>({});
+const pluginStorageKey = 'wttch-hub:plugin-settings';
+
+const initializePluginSettings = () => {
+  let stored: {
+    enabled?: Record<string, boolean>;
+    values?: Record<string, Record<string, boolean | number | string>>;
+  } = {};
+  try {
+    stored = JSON.parse(localStorage.getItem(pluginStorageKey) ?? '{}') as typeof stored;
+  } catch {
+    localStorage.removeItem(pluginStorageKey);
+  }
+  for (const plugin of tools) {
+    pluginEnabled.value[plugin.id] = stored.enabled?.[plugin.id] ?? true;
+    pluginValues.value[plugin.id] = {};
+    for (const field of plugin.settings?.fields ?? []) {
+      pluginValues.value[plugin.id][field.key] = stored.values?.[plugin.id]?.[field.key] ?? field.defaultValue;
+    }
+  }
+};
+
+watch([pluginEnabled, pluginValues], () => {
+  localStorage.setItem(pluginStorageKey, JSON.stringify({ enabled: pluginEnabled.value, values: pluginValues.value }));
+}, { deep: true });
+
+initializePluginSettings();
 
 const appVersion = '0.1.0';
 </script>
@@ -60,6 +89,47 @@ const appVersion = '0.1.0';
       </div>
     </div>
 
+    <div id="plugins" class="group plugin-settings">
+      <h3 class="group-title">插件配置</h3>
+      <div class="plugin-list">
+        <article
+          v-for="plugin in tools"
+          :key="plugin.id"
+          class="card plugin-card"
+        >
+          <div class="plugin-heading">
+            <span class="plugin-icon" :style="{ color: plugin.tint[0], background: plugin.tint[1] }">
+              <component :is="plugin.icon" :size="17" />
+            </span>
+            <div class="plugin-info">
+              <strong>{{ plugin.name }}</strong>
+              <small>{{ plugin.id }} · API v{{ plugin.apiVersion }}</small>
+            </div>
+            <label class="switch">
+              <input v-model="pluginEnabled[plugin.id]" type="checkbox">
+              <span class="track" />
+              <span class="knob" />
+            </label>
+          </div>
+          <p v-if="plugin.settings?.description" class="plugin-description">{{ plugin.settings.description }}</p>
+          <div v-for="field in plugin.settings?.fields ?? []" :key="field.key" class="row plugin-field">
+            <span class="row-label">{{ field.label }}</span>
+            <input
+              v-if="field.type !== 'boolean'"
+              v-model="pluginValues[plugin.id][field.key]"
+              class="text-input"
+              :type="field.type"
+            >
+            <label v-else class="switch">
+              <input v-model="pluginValues[plugin.id][field.key]" type="checkbox">
+              <span class="track" />
+              <span class="knob" />
+            </label>
+          </div>
+        </article>
+      </div>
+    </div>
+
     <div class="group">
       <h3 class="group-title">
         偏好
@@ -108,6 +178,17 @@ const appVersion = '0.1.0';
   color: var(--text-secondary);
   font-size: 13px;
 }
+
+.plugin-list { display: grid; gap: 10px; }
+.plugin-card { padding: 14px 16px; }
+.plugin-heading { display: flex; align-items: center; gap: 10px; }
+.plugin-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; }
+.plugin-info { display: flex; flex: 1; flex-direction: column; gap: 3px; min-width: 0; }
+.plugin-info strong { font-size: 13px; }
+.plugin-info small, .plugin-description { color: var(--text-secondary); font-size: 11px; }
+.plugin-description { margin: 10px 0 0 42px; }
+.plugin-field { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--hairline); }
+.text-input { width: 110px; padding: 4px 7px; border: 1px solid var(--hairline); border-radius: 5px; background: transparent; color: var(--text); text-align: right; }
 
 .chevron {
   color: rgba(0, 0, 0, 0.28);
