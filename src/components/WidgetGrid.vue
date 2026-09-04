@@ -10,8 +10,8 @@ type WidgetItem = { id: string; x: number; y: number; w: number; h: number; pinn
 const widgetPlugins = pluginRuntime.enabledWidgets;
 const defaults: WidgetItem[] = widgetPlugins.value.map((plugin, index) => ({
   id: plugin.id,
-  x: index * 6,
-  y: 0,
+  x: (index % 2) * 6,
+  y: Math.floor(index / 2) * 2,
   w: plugin.widget?.defaultWidth ?? 6,
   h: plugin.widget?.defaultHeight ?? 2,
   pinned: false,

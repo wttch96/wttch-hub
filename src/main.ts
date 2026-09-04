@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, net } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, net, Notification, screen } from 'electron';
 import 'dotenv/config';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -18,6 +18,7 @@ type PluginPackageInfo = {
   source?: 'managed' | 'workspace';
 };
 type PluginBundle = { apiVersion: number; plugins: Omit<PluginPackageInfo, 'file'>[] };
+type FloatingWidgetOptions = { width?: number; height?: number; alwaysOnTop?: boolean; locked?: boolean };
 
 const pluginDirectories = () => [
   { directory: path.join(app.getPath('userData'), 'plugins'), source: 'managed' as const, removable: true },
@@ -102,10 +103,120 @@ const IPC = {
   toggleDevTools: 'win:toggle-devtools',
   maximizedChanged: 'win:maximized-changed',
   systemStats: 'system:stats',
+  showNotification: 'notifications:show',
+  floatingOpen: 'floating-widget:open',
+  floatingUpdate: 'floating-widget:update',
+  floatingClose: 'floating-widget:close',
   pluginPackages: 'plugins:list',
   pluginInstall: 'plugins:install',
   pluginRemove: 'plugins:remove',
 } as const;
+
+const floatingWidgets = new Map<string, BrowserWindow>();
+const safeFloatingPluginId = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(value);
+const floatingSize = (value: unknown, fallback: number, min: number, max: number) => typeof value === 'number' && Number.isFinite(value)
+  ? Math.round(Math.max(min, Math.min(max, value)))
+  : fallback;
+const setFloatingVisibleOnAllWorkspaces = (window: BrowserWindow, visible: boolean) => {
+  try {
+    window.setVisibleOnAllWorkspaces(visible, { visibleOnFullScreen: true });
+  } catch (error) {
+    // Linux window managers and some virtual desktop environments do not
+    // implement this API. The widget can still work as a normal always-on-top
+    // window, so do not make opening it fail for this optional behavior.
+    console.warn('[floating-widget] visible-on-all-workspaces is unavailable:', error);
+  }
+};
+const applyFloatingOptions = (window: BrowserWindow, options: FloatingWidgetOptions = {}) => {
+  if (options.width !== undefined || options.height !== undefined) {
+    const [currentWidth, currentHeight] = window.getSize();
+    window.setSize(
+      floatingSize(options.width, currentWidth, 180, 900),
+      floatingSize(options.height, currentHeight, 100, 700),
+      true,
+    );
+  }
+  if (options.alwaysOnTop !== undefined) {
+    window.setAlwaysOnTop(options.alwaysOnTop, 'floating');
+    setFloatingVisibleOnAllWorkspaces(window, options.alwaysOnTop);
+  }
+  if (options.locked !== undefined) {
+    window.setMovable(!options.locked);
+    window.setResizable(!options.locked);
+  }
+};
+
+ipcMain.handle(IPC.floatingOpen, async (_event, pluginId: unknown, options: FloatingWidgetOptions = {}) => {
+  if (!safeFloatingPluginId(pluginId)) throw new Error('无效的浮动 Widget 插件 ID');
+  const existing = floatingWidgets.get(pluginId);
+  if (existing && !existing.isDestroyed()) {
+    applyFloatingOptions(existing, options);
+    existing.show(); existing.focus();
+    return true;
+  }
+  const width = floatingSize(options.width, 320, 180, 900);
+  const height = floatingSize(options.height, 190, 100, 700);
+  const workArea = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  const floatingWindow = new BrowserWindow({
+    width, height,
+    x: workArea.x + workArea.width - width - 24,
+    y: workArea.y + 24,
+    minWidth: 180,
+    minHeight: 100,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    skipTaskbar: true,
+    show: false,
+    resizable: options.locked !== true,
+    movable: options.locked !== true,
+    alwaysOnTop: options.alwaysOnTop !== false,
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
+  });
+  floatingWidgets.set(pluginId, floatingWindow);
+  setFloatingVisibleOnAllWorkspaces(floatingWindow, options.alwaysOnTop !== false);
+  floatingWindow.on('closed', () => floatingWidgets.delete(pluginId));
+  const hash = `/floating/${pluginId}`;
+  try {
+    // `ready-to-show` is not guaranteed for every transparent frameless
+    // window. Waiting for the document and explicitly showing the window makes
+    // the IPC result match what the user actually sees.
+    if (MAIN_WINDOW_VITE_DEV_SERVER_URL) await floatingWindow.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}#${hash}`);
+    else await floatingWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), { hash });
+    if (floatingWindow.isDestroyed()) return false;
+    floatingWindow.show();
+    floatingWindow.focus();
+    return floatingWindow.isVisible();
+  } catch (error) {
+    floatingWidgets.delete(pluginId);
+    if (!floatingWindow.isDestroyed()) floatingWindow.destroy();
+    console.error(`[floating-widget] failed to open ${pluginId}:`, error);
+    throw error;
+  }
+});
+ipcMain.handle(IPC.floatingUpdate, (_event, pluginId: unknown, options: FloatingWidgetOptions = {}) => {
+  if (!safeFloatingPluginId(pluginId)) return false;
+  const floatingWindow = floatingWidgets.get(pluginId);
+  if (!floatingWindow || floatingWindow.isDestroyed()) return false;
+  applyFloatingOptions(floatingWindow, options);
+  return true;
+});
+ipcMain.handle(IPC.floatingClose, (_event, pluginId: unknown) => {
+  if (!safeFloatingPluginId(pluginId)) return false;
+  const floatingWindow = floatingWidgets.get(pluginId);
+  if (!floatingWindow || floatingWindow.isDestroyed()) return false;
+  floatingWindow.close();
+  return true;
+});
+
+ipcMain.handle(IPC.showNotification, (_event, input: { title?: unknown; body?: unknown; silent?: unknown }) => {
+  const title = typeof input?.title === 'string' ? input.title.trim().slice(0, 120) : '';
+  const body = typeof input?.body === 'string' ? input.body.trim().slice(0, 500) : '';
+  if (!title || !Notification.isSupported()) return false;
+  new Notification({ title, body, silent: input.silent === true }).show();
+  return true;
+});
 
 ipcMain.handle(IPC.pluginPackages, () => loadPluginPackages());
 ipcMain.handle(IPC.pluginInstall, async () => {
@@ -243,6 +354,9 @@ const createWindow = () => {
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      // Alarm plugins keep their load-lifecycle scheduler active while the
+      // window is minimized or fully covered.
+      backgroundThrottling: false,
     },
   });
 

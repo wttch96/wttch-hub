@@ -13,7 +13,7 @@ import type { PluginBundleDefinition, PluginPackageDefinition } from '../src/typ
 const root = process.cwd();
 const sourceRoot = path.join(root, 'src', 'plugins');
 const outputRoot = path.join(root, 'plugins');
-const pluginIds = ['system-monitor', 'theme'];
+const pluginIds = ['system-monitor', 'theme', 'todo', 'alarm'];
 
 const collectFiles = (directory: string, prefix: string, output: Record<string, Uint8Array>) => {
   for (const name of readdirSync(directory).sort()) {

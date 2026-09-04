@@ -30,6 +30,10 @@ const windowControls = {
 
 const toolHost = {
   stats: () => ipcRenderer.invoke('system:stats'),
+  showNotification: (options: import('./types/plugin').PluginNotification) => ipcRenderer.invoke('notifications:show', options),
+  openFloatingWidget: (pluginId: string, options?: import('./types/plugin').FloatingWidgetWindowOptions) => ipcRenderer.invoke('floating-widget:open', pluginId, options),
+  updateFloatingWidget: (pluginId: string, options: import('./types/plugin').FloatingWidgetWindowOptions) => ipcRenderer.invoke('floating-widget:update', pluginId, options),
+  closeFloatingWidget: (pluginId: string) => ipcRenderer.invoke('floating-widget:close', pluginId),
 };
 
 export type WindowControlsApi = typeof windowControls;
@@ -37,6 +41,10 @@ export type WindowControlsApi = typeof windowControls;
 contextBridge.exposeInMainWorld('windowControls', windowControls);
 contextBridge.exposeInMainWorld('toolHost', {
   systemStats: toolHost.stats,
+  showNotification: toolHost.showNotification,
+  openFloatingWidget: toolHost.openFloatingWidget,
+  updateFloatingWidget: toolHost.updateFloatingWidget,
+  closeFloatingWidget: toolHost.closeFloatingWidget,
   pluginPackages: () => ipcRenderer.invoke('plugins:list'),
   installPluginPackage: () => ipcRenderer.invoke('plugins:install'),
   removePluginPackage: (file: string) => ipcRenderer.invoke('plugins:remove', file),

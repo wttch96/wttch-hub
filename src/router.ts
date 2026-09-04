@@ -8,6 +8,7 @@ import PluginsView from './views/PluginsView.vue';
 import { allTools } from './config/tools';
 import { pluginRuntime } from './plugins/runtime';
 import PluginToolHost from './components/PluginToolHost.vue';
+import PluginFloatingWidgetHost from './components/PluginFloatingWidgetHost.vue';
 
 // The imported wttch-labs tools are embedded as nested routes under /tools:
 // /tools is the tool-library page, each tool opens on its own child route so the
@@ -44,6 +45,13 @@ const router = createRouter({
     { path: '/settings', name: 'settings', component: SettingsView },
     { path: '/plugins', name: 'plugins', component: PluginsView },
     { path: '/examples/overlays', name: 'overlay-demo', component: OverlayDemoView },
+    {
+      path: '/floating/:pluginId',
+      name: 'floating-widget',
+      component: PluginFloatingWidgetHost,
+      props: true,
+      meta: { floating: true },
+    },
     { path: '/:pathMatch(.*)*', redirect: '/home' },
   ],
 });

@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from 'vue';
+import { computed, defineAsyncComponent, provide } from 'vue';
 import { findTool } from '../config/tools';
 import { pluginRuntime } from '../plugins/runtime';
+import { PLUGIN_COMPONENT_API_KEY } from '../types/plugin';
 
 const props = defineProps<{ pluginId: string }>();
 const plugin = findTool(props.pluginId);
 const toolComponent = plugin ? defineAsyncComponent(plugin.component) : undefined;
 const settings = computed(() => pluginRuntime.values[props.pluginId] ?? {});
+const pluginApi = plugin ? pluginRuntime.componentApi(plugin.id) : undefined;
+provide(PLUGIN_COMPONENT_API_KEY, pluginApi);
 const updateSetting = (key: string, value: boolean | number | string) => pluginRuntime.updateSetting(props.pluginId, key, value);
 </script>
 

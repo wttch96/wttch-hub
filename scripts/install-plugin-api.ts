@@ -31,7 +31,8 @@ try {
 		'const definePluginPackage = (definition) => definition;',
 		'const defineToolPlugin = (plugin) => plugin;',
 		'const PLUGIN_API_VERSION = 1;',
-		'module.exports = { PLUGIN_API_VERSION, definePluginPackage, defineToolPlugin };',
+		"const PLUGIN_COMPONENT_API_KEY = 'wttch-hub:plugin-api';",
+		'module.exports = { PLUGIN_API_VERSION, PLUGIN_COMPONENT_API_KEY, definePluginPackage, defineToolPlugin };',
 		'',
 	].join('\n'));
 	writeFileSync(path.join(packageDir, 'index.d.ts'), `${readFileSync(source, 'utf8')}\n`);

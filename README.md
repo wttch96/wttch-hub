@@ -30,7 +30,7 @@
 
 工具通过 `src/types/plugin.ts` 中版本化的 `ToolPlugin` API 声明（当前 `apiVersion: 1`）。内置工具注册在 `src/config/tools.ts`；放入 `src/plugins/<id>/index.ts` 的插件会由 `import.meta.glob` 自动发现，并按声明生成工具路由、主页 Widget、statusbar 和设置表单。`src/plugins/runtime.ts` 是统一状态机，负责加载、引用计数激活、停用、卸载、错误隔离、设置事件以及插件私有存储。插件组件通过 `window.toolHost` 使用宿主能力，例如 `window.toolHost?.systemStats()`，不直接访问 Electron IPC。
 
-系统监控和主题配置源码位于 `src/plugins/`，分别示范 Widget/系统能力与主题 token/颜色设置。插件包定义写在各自的 `package.ts` 中；运行 `npm run install:plugin-api` 会先卸载旧版本，再将最新的 `@wttch-hub/plugin-api` 安装到 `node_modules`，插件通过包名直接导入宿主 API 类型和定义函数。插件集合 ZIP 由独立的外部打包流程生成，`npm run install:plugins` 可将集合包整体安装或更新到 `src/plugins/`。插件页面还可以用系统文件选择器把 ZIP 加载到 Electron `userData/plugins` 仓库，主进程会限制包体积、验证 API 版本、ID、入口路径和重复 ID；托管仓库中的包可以删除。
+系统监控、主题配置、Todo 清单和闹钟提醒源码位于 `src/plugins/`，分别示范 Widget/系统能力、主题 token、私有数据存储和桌面通知。插件包定义写在各自的 `package.ts` 中；运行 `npm run install:plugin-api` 会先卸载旧版本，再将最新的 `@wttch-hub/plugin-api` 安装到 `node_modules`，插件通过包名直接导入宿主 API 类型和定义函数。插件集合 ZIP 由独立的外部打包流程生成，`npm run install:plugins` 可将集合包整体安装或更新到 `src/plugins/`。插件页面还可以用系统文件选择器把 ZIP 加载到 Electron `userData/plugins` 仓库，主进程会限制包体积、验证 API 版本、ID、入口路径和重复 ID；托管仓库中的包可以删除。
 
 ### 生命周期与宿主 API
 
@@ -38,13 +38,19 @@
 
 `PluginActivationContext` 提供以下受控能力：
 
-- `host`：主进程能力代理，目前包含系统统计数据。
+- `host`：主进程能力代理，目前包含系统统计数据和受校验的桌面通知。
 - `ui`：Toast 和 Sheet UI，不需要插件直接操作宿主组件。
 - `settings`：读取、更新设置并订阅变化；声明式字段支持 boolean、number、text 和 select。
-- `storage`：按插件 ID 隔离并持久化的键值存储。
+- `storage`：按插件 ID 隔离并持久化的键值存储，支持变更订阅。
+- `PLUGIN_COMPONENT_API_KEY`：工具页和 Widget 通过 Vue `inject` 获取同一套受控宿主能力。
+- `floatingWidget`：声明独立的透明浮动组件；`host.openFloatingWidget()`、`updateFloatingWidget()` 和 `closeFloatingWidget()` 控制窗口尺寸、置顶及位置锁定。
 - `subscriptions`：VS Code 风格的 Disposable 集合。
 
 插件管理页展示 `加载中 / 已加载 / 激活中 / 运行中 / 已禁用 / 错误` 状态，并提供打开、设置、启用/禁用和删除操作。禁用会立即从工具库、路由和 Widget 库移除，并执行清理。Widget 支持添加、移除、拖动、缩放、固定和布局持久化。
+
+闹钟调度器在插件 `load` 生命周期中运行，窗口最小化时仍保持计时；禁用插件或退出应用会按生命周期停止调度。应用完全退出后不会驻留系统后台，因此不会触发关机期间的提醒。
+
+闹钟插件同时提供主页时间 Widget 和浮动时钟。浮动窗口使用独立透明渲染器，可始终置顶并跨桌面显示；锁定后禁止窗口移动和缩放。浮动渲染器只激活主题与目标插件，避免重复运行插件级后台任务。
 
 > Vue SFC/TypeScript 插件必须参与 Vite 编译。应用内“加载 ZIP”负责可信包仓库和清单管理；如果包中的插件 ID 尚未编译进当前应用，管理页会显示“待编译”。开发时将包放入项目 `plugins/`，运行 `npm run install:plugins` 后重新构建。宿主不会把任意 ZIP 源码当作 JavaScript 直接执行。
 
@@ -66,7 +72,7 @@ npm start
 | `npm run make` | 生成平台安装包 |
 | `npm run publish` | 发布 |
 | `npm run lint` | ESLint 检查（`.ts` / `.tsx` / `.vue`） |
-| `npm run pack:plugins` | 将系统监控源码打成 `plugins/wttch-hub@plugins-1.0.0.zip` |
+| `npm run pack:plugins` | 将系统监控、主题、Todo 和闹钟源码打成插件集合 ZIP |
 
 ### 插件开发流程
 
@@ -100,7 +106,7 @@ export default definePluginPackage({
 
 插件 API 更新后，重新运行 `npm run install:plugin-api`；开发服务器需要重启才能重新解析依赖。插件的启用状态和配置由宿主设置页管理，路由切换时宿主会执行插件事件回调返回的 cleanup 函数。
 
-系统监控与主题配置作为完整的外置插件示例发布。修改 `src/plugins/system-monitor/` 或 `src/plugins/theme/` 后运行 `npm run pack:plugins`，会将入口、Vue 页面、Widget、主题定义、包清单和插件 API 类型快照压缩到 `plugins/wttch-hub@plugins-1.0.0.zip`。在一份没有已安装源码的工作区中，把该 ZIP 放入 `plugins/` 并运行 `npm run install:plugins`，即可恢复插件源码后参与构建。
+系统监控、主题配置、Todo 清单与闹钟提醒作为完整的外置插件示例发布。修改 `src/plugins/` 后运行 `npm run pack:plugins`，会将入口、Vue 页面、Widget、主题定义、包清单和插件 API 类型快照压缩到 `plugins/wttch-hub@plugins-1.0.0.zip`。在一份没有已安装源码的工作区中，把该 ZIP 放入 `plugins/` 并运行 `npm run install:plugins`，即可恢复插件源码后参与构建。
 
 ### 开发诊断
 
@@ -124,6 +130,9 @@ src/
 plugins/             # 生成的插件 ZIP，仅用于分发和运行时扫描
 src/plugins/
   system-monitor/    # 外置插件源码：CPU / GPU / 内存 / IO 监控
+  theme/             # 全局主题 token 与预设色板
+  todo/              # Todo 工具页、Widget 与私有存储
+  alarm/             # 闹钟工具页、Widget、后台调度与桌面通知
   lib/  types/  composables/   # 工具共享代码（含空桩 useSiteFooter）
 public/templates/    # folderart 模板 PNG（构建期原样复制到产物）
 ```

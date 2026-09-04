@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, watch } from 'vue';
+import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ChevronLeft } from 'lucide-vue-next';
-import { findTool } from '../config/tools';
-import type { PluginCleanup } from '../types/plugin';
 
 // ToolsArea is the nested layout under /tools. At /tools it simply hosts the
 // tool-library page; on /tools/<tool> it shows a slim bar with a way back to
@@ -16,25 +14,6 @@ const isTool = computed(() => route.meta.tool === true);
 // tools (paned editors) fill the area exactly and manage their own overflow.
 const flow = computed(() => route.meta.flow === true);
 const toolTitle = computed(() => (route.meta.title as string | undefined) ?? '');
-let cleanup: PluginCleanup | undefined;
-
-// Lifecycle functions stay in the TypeScript plugin declaration and are never
-// serialized into a ZIP manifest. The host owns their execution so plugins
-// cannot install global listeners without getting a matching cleanup call.
-watch(
-  () => route.meta.tool ? String(route.name) : '',
-  () => {
-    cleanup?.();
-    cleanup = undefined;
-    const plugin = route.meta.tool ? findTool(String(route.params.pathMatch ?? route.name).replace('tool-', '')) : undefined;
-    if (plugin?.events?.activate && window.toolHost) {
-      cleanup = plugin.events.activate({ host: window.toolHost, path: route.fullPath });
-    }
-  },
-  { immediate: true },
-);
-
-onBeforeUnmount(() => cleanup?.());
 </script>
 
 <template>
@@ -70,7 +49,10 @@ onBeforeUnmount(() => cleanup?.());
           name="view"
           mode="out-in"
         >
-          <component :is="Component" />
+          <component
+            :is="Component"
+            :key="route.fullPath"
+          />
         </Transition>
       </RouterView>
     </div>

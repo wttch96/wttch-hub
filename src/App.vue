@@ -10,6 +10,12 @@ import { pluginRuntime } from './plugins/runtime';
 const appName = 'wttch-hub';
 
 const route = useRoute();
+const isFloatingWindow = computed(() => route.meta.floating === true);
+const floatingPluginId = computed(() => typeof route.params.pluginId === 'string' ? route.params.pluginId : '');
+// Keep nested layouts mounted while switching their child routes. Re-keying
+// ToolsArea for every /tools/* navigation races its own child transition and
+// can make Vue remove the same DOM node twice (parentNode is null).
+const rootViewKey = computed(() => route.matched[0]?.path ?? route.path);
 
 // The bottom status bar names where you are; its right-hand debug button toggles
 // the Chrome DevTools (opened detached so the custom window keeps its shape).
@@ -39,6 +45,13 @@ let releaseRoutePlugin: (() => Promise<void>) | undefined;
 let routeActivation = 0;
 
 onMounted(async () => {
+  if (isFloatingWindow.value) {
+    // A floating renderer only loads the theme plus its own plugin. Loading
+    // every plugin here would start a second alarm scheduler.
+    await pluginRuntime.initialize(['theme']);
+    if (floatingPluginId.value) releaseRoutePlugin = await pluginRuntime.acquire(floatingPluginId.value, 'floating-widget', route.fullPath);
+    return;
+  }
   // Keep the zoom glyph and rounded corners in sync with the real window state.
   unsubscribe = controls?.onMaximizedChange((maximized) => {
     isMaximized.value = maximized;
@@ -47,6 +60,7 @@ onMounted(async () => {
 });
 
 watch(() => route.meta?.pluginId as string | undefined, async (pluginId) => {
+  if (isFloatingWindow.value) return;
   const activation = ++routeActivation;
   await releaseRoutePlugin?.();
   releaseRoutePlugin = undefined;
@@ -78,7 +92,14 @@ const onTitleDblClick = (event: MouseEvent) => {
 </script>
 
 <template>
+  <main
+    v-if="isFloatingWindow"
+    class="floating-window"
+  >
+    <RouterView />
+  </main>
   <div
+    v-else
     class="window"
     :class="{ 'is-custom': customChrome, 'is-macos': macOS, 'is-maximized': isMaximized }"
   >
@@ -177,7 +198,7 @@ const onTitleDblClick = (event: MouseEvent) => {
           >
             <component
               :is="Component"
-              :key="route.fullPath"
+              :key="rootViewKey"
             />
           </Transition>
         </RouterView>
@@ -208,6 +229,7 @@ const onTitleDblClick = (event: MouseEvent) => {
 </template>
 
 <style scoped>
+.floating-window { width: 100%; height: 100%; overflow: hidden; background: transparent; }
 .window {
   display: flex;
   flex-direction: column;

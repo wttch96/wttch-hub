@@ -34,6 +34,10 @@ interface Window {
   windowControls?: WindowControlsApi;
   toolHost?: {
     systemStats(): Promise<import('./types/plugin').SystemStats>;
+    showNotification(options: import('./types/plugin').PluginNotification): Promise<boolean>;
+    openFloatingWidget(pluginId: string, options?: import('./types/plugin').FloatingWidgetWindowOptions): Promise<boolean>;
+    updateFloatingWidget(pluginId: string, options: import('./types/plugin').FloatingWidgetWindowOptions): Promise<boolean>;
+    closeFloatingWidget(pluginId: string): Promise<boolean>;
     pluginPackages(): Promise<import('./types/plugin').PluginPackageInfo[]>;
     installPluginPackage(): Promise<import('./types/plugin').PluginInstallResult>;
     removePluginPackage(file: string): Promise<import('./types/plugin').PluginPackageInfo[]>;

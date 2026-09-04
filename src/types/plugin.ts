@@ -23,17 +23,38 @@ export type SystemStats = {
   uploadBytes: number;
 };
 
+export type PluginNotification = {
+  title: string;
+  body?: string;
+  silent?: boolean;
+};
+
+export type FloatingWidgetWindowOptions = {
+  width?: number;
+  height?: number;
+  alwaysOnTop?: boolean;
+  locked?: boolean;
+};
+
 export interface ToolHostApi {
   /** 请求一次最新系统统计数据。 */
   systemStats(): Promise<SystemStats>;
+  /** 通过主进程显示一条系统桌面通知。 */
+  showNotification(options: PluginNotification): Promise<boolean>;
+  /** 打开当前插件声明的透明浮动 Widget。 */
+  openFloatingWidget(options?: FloatingWidgetWindowOptions): Promise<boolean>;
+  /** 更新浮动 Widget 的置顶、锁定或尺寸状态。 */
+  updateFloatingWidget(options: FloatingWidgetWindowOptions): Promise<boolean>;
+  /** 关闭当前插件的浮动 Widget。 */
+  closeFloatingWidget(): Promise<boolean>;
 }
 
 export type MaybePromise<T> = T | Promise<T>;
 export interface Disposable { dispose(): void; }
 /** 插件回调可返回清理函数或 VS Code 风格的 Disposable。 */
 export type PluginCleanup = (() => MaybePromise<void>) | Disposable;
-export type PluginActivationReason = 'startup' | 'route' | 'widget' | 'manual';
-export type PluginDeactivationReason = 'route' | 'widget' | 'disabled' | 'uninstalled' | 'shutdown' | 'error';
+export type PluginActivationReason = 'startup' | 'route' | 'widget' | 'floating-widget' | 'manual';
+export type PluginDeactivationReason = 'route' | 'widget' | 'floating-widget' | 'disabled' | 'uninstalled' | 'shutdown' | 'error';
 
 export interface PluginSettingsApi {
   get<T extends boolean | number | string>(key: string, fallback?: T): T | undefined;
@@ -45,6 +66,7 @@ export interface PluginStorageApi {
   get<T>(key: string, fallback?: T): T | undefined;
   update<T>(key: string, value: T): void;
   delete(key: string): void;
+  onDidChange(listener: (key: string, value: unknown) => void): Disposable;
 }
 
 export interface PluginUiApi {
@@ -53,6 +75,17 @@ export interface PluginUiApi {
   openSheet(options: { title?: string; component?: Component; props?: Record<string, unknown> }): void;
   closeSheet(): void;
 }
+
+/** 注入工具页和 Widget 的受控插件能力。 */
+export interface PluginComponentApi {
+  host: ToolHostApi;
+  settings: PluginSettingsApi;
+  storage: PluginStorageApi;
+  ui: PluginUiApi;
+}
+
+/** Vue provide/inject 使用的稳定键。 */
+export const PLUGIN_COMPONENT_API_KEY = 'wttch-hub:plugin-api';
 
 /** 插件激活回调收到的上下文，后续可继续扩展宿主能力。 */
 export interface PluginActivationContext {
@@ -141,6 +174,8 @@ export interface ToolPlugin {
   };
   capabilities?: {
     systemStats?: boolean;
+    notifications?: boolean;
+    floatingWidget?: boolean;
     toast?: boolean;
     sheet?: boolean;
   };
@@ -171,6 +206,13 @@ export interface ToolPlugin {
     minWidth?: number;
     minHeight?: number;
     refreshIntervalMs: number;
+  };
+  floatingWidget?: {
+    component: ComponentLoader;
+    defaultWidth: number;
+    defaultHeight: number;
+    minWidth?: number;
+    minHeight?: number;
   };
 }
 

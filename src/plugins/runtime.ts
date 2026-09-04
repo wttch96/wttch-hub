@@ -4,6 +4,7 @@ import type {
   PluginActivationContext,
   PluginActivationReason,
   PluginCleanup,
+  PluginComponentApi,
   PluginDeactivationReason,
   PluginLifecycleContext,
   ToolPlugin,
@@ -37,6 +38,7 @@ const activationCleanup = new Map<string, PluginCleanup>();
 const loadCleanup = new Map<string, PluginCleanup>();
 const subscriptions = new Map<string, Disposable[]>();
 const settingListeners = new Map<string, Set<(key: string, value: SettingValue) => void>>();
+const storageListeners = new Map<string, Set<(key: string, value: unknown) => void>>();
 const loadTasks = new Map<string, Promise<void>>();
 let initialized = false;
 
@@ -52,6 +54,28 @@ const save = () => localStorage.setItem(persistenceKey, JSON.stringify({
   values,
   storage,
 }));
+// Electron floating widgets run in a separate renderer. Keep settings and
+// plugin-private data synchronized through the shared localStorage origin.
+window.addEventListener('storage', (event) => {
+  if (event.key !== persistenceKey || !event.newValue) return;
+  try {
+    const next = JSON.parse(event.newValue) as PersistedState;
+    for (const plugin of allTools) {
+      const nextValues = next.values?.[plugin.id];
+      if (nextValues) for (const [key, value] of Object.entries(nextValues)) {
+        if (values[plugin.id][key] === value) continue;
+        values[plugin.id][key] = value;
+        settingListeners.get(plugin.id)?.forEach((listener) => listener(key, value));
+      }
+      const nextStorage = next.storage?.[plugin.id];
+      if (nextStorage) {
+        const keys = new Set([...Object.keys(storage[plugin.id]), ...Object.keys(nextStorage)]);
+        storage[plugin.id] = { ...nextStorage };
+        keys.forEach((key) => storageListeners.get(plugin.id)?.forEach((listener) => listener(key, nextStorage[key])));
+      }
+    }
+  } catch { /* Ignore partial writes from an older or invalid runtime. */ }
+});
 const pluginFor = (id: string) => allTools.find((plugin) => plugin.id === id);
 const dispose = async (cleanup?: PluginCleanup) => {
   if (!cleanup) return;
@@ -68,15 +92,36 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
   settingListeners.set(plugin.id, listeners);
   const pluginSubscriptions = subscriptions.get(plugin.id) ?? [];
   subscriptions.set(plugin.id, pluginSubscriptions);
+  const pluginStorageListeners = storageListeners.get(plugin.id) ?? new Set();
+  storageListeners.set(plugin.id, pluginStorageListeners);
   const toast = useToast();
   const sheet = useSheet();
   return {
     path,
     reason,
     subscriptions: pluginSubscriptions,
-    host: { systemStats: () => plugin.capabilities?.systemStats && window.toolHost
-      ? window.toolHost.systemStats()
-      : Promise.reject(new Error(`插件 ${plugin.id} 未声明 systemStats 能力`)) },
+    host: {
+      systemStats: () => plugin.capabilities?.systemStats && window.toolHost
+        ? window.toolHost.systemStats()
+        : Promise.reject(new Error(`插件 ${plugin.id} 未声明 systemStats 能力`)),
+      showNotification: (options) => plugin.capabilities?.notifications && window.toolHost?.showNotification
+        ? window.toolHost.showNotification(options)
+        : Promise.reject(new Error(`插件 ${plugin.id} 未声明 notifications 能力`)),
+      openFloatingWidget: (options) => plugin.capabilities?.floatingWidget && plugin.floatingWidget && window.toolHost?.openFloatingWidget
+        ? window.toolHost.openFloatingWidget(plugin.id, {
+            width: options?.width ?? plugin.floatingWidget.defaultWidth,
+            height: options?.height ?? plugin.floatingWidget.defaultHeight,
+            alwaysOnTop: options?.alwaysOnTop,
+            locked: options?.locked,
+          })
+        : Promise.reject(new Error(`插件 ${plugin.id} 未声明 floatingWidget 能力`)),
+      updateFloatingWidget: (options) => plugin.capabilities?.floatingWidget && window.toolHost?.updateFloatingWidget
+        ? window.toolHost.updateFloatingWidget(plugin.id, options)
+        : Promise.reject(new Error(`插件 ${plugin.id} 未声明 floatingWidget 能力`)),
+      closeFloatingWidget: () => plugin.capabilities?.floatingWidget && window.toolHost?.closeFloatingWidget
+        ? window.toolHost.closeFloatingWidget(plugin.id)
+        : Promise.reject(new Error(`插件 ${plugin.id} 未声明 floatingWidget 能力`)),
+    },
     settings: {
       get: <T extends SettingValue>(key: string, fallback?: T) => (values[plugin.id]?.[key] as T | undefined) ?? fallback,
       update: (key, value) => updateSetting(plugin.id, key, value),
@@ -84,8 +129,9 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
     },
     storage: {
       get: <T>(key: string, fallback?: T) => (storage[plugin.id]?.[key] as T | undefined) ?? fallback,
-      update: (key, value) => { storage[plugin.id][key] = value; save(); },
-      delete: (key) => { delete storage[plugin.id][key]; save(); },
+      update: (key, value) => { storage[plugin.id][key] = value; save(); pluginStorageListeners.forEach((listener) => listener(key, value)); },
+      delete: (key) => { delete storage[plugin.id][key]; save(); pluginStorageListeners.forEach((listener) => listener(key, undefined)); },
+      onDidChange: (listener) => { pluginStorageListeners.add(listener); return { dispose: () => pluginStorageListeners.delete(listener) }; },
     },
     ui: {
       showToast: (...args) => {
@@ -147,10 +193,11 @@ const unload = async (plugin: ToolPlugin, reason: PluginDeactivationReason) => {
   } catch (error) { fail(plugin, error); }
 };
 
-export const initializePlugins = async () => {
+export const initializePlugins = async (pluginIds?: string[]) => {
   if (initialized) return;
   initialized = true;
-  await Promise.all(allTools.filter((plugin) => states[plugin.id].enabled).map((plugin) => load(plugin)));
+  const selected = pluginIds ? new Set(pluginIds) : undefined;
+  await Promise.all(allTools.filter((plugin) => states[plugin.id].enabled && (!selected || selected.has(plugin.id))).map((plugin) => load(plugin)));
 };
 
 export const acquirePlugin = async (id: string, reason: PluginActivationReason, path = ''): Promise<() => Promise<void>> => {
@@ -202,5 +249,11 @@ export const pluginRuntime = {
   enabledTools: computed(() => allTools.filter((plugin) => states[plugin.id]?.enabled)),
   enabledWidgets: computed(() => allTools.filter((plugin) => states[plugin.id]?.enabled && plugin.widget)),
   initialize: initializePlugins, acquire: acquirePlugin, setEnabled: setPluginEnabled, updateSetting,
+  componentApi(id: string): PluginComponentApi | undefined {
+    const plugin = pluginFor(id);
+    if (!plugin) return undefined;
+    const { host, settings, storage: pluginStorage, ui } = contextFor(plugin, '', 'manual');
+    return { host, settings, storage: pluginStorage, ui };
+  },
   async shutdown() { await Promise.all(allTools.map((plugin) => unload(plugin, 'shutdown'))); },
 };
