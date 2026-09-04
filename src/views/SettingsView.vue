@@ -1,40 +1,19 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import { ChevronRight } from 'lucide-vue-next';
-import { tools } from '../config/tools';
+import { allTools as tools } from '../config/tools';
+import { pluginRuntime } from '../plugins/runtime';
 
 // UI 骨架阶段的占位开关，后续再接到真实的持久化配置上。
 const startOnHome = ref(true);
 const launchToTray = ref(false);
 const autoCheckUpdate = ref(true);
-const pluginEnabled = ref<Record<string, boolean>>({});
-const pluginValues = ref<Record<string, Record<string, boolean | number | string>>>({});
-const pluginStorageKey = 'wttch-hub:plugin-settings';
-
-const initializePluginSettings = () => {
-  let stored: {
-    enabled?: Record<string, boolean>;
-    values?: Record<string, Record<string, boolean | number | string>>;
-  } = {};
-  try {
-    stored = JSON.parse(localStorage.getItem(pluginStorageKey) ?? '{}') as typeof stored;
-  } catch {
-    localStorage.removeItem(pluginStorageKey);
-  }
-  for (const plugin of tools) {
-    pluginEnabled.value[plugin.id] = stored.enabled?.[plugin.id] ?? true;
-    pluginValues.value[plugin.id] = {};
-    for (const field of plugin.settings?.fields ?? []) {
-      pluginValues.value[plugin.id][field.key] = stored.values?.[plugin.id]?.[field.key] ?? field.defaultValue;
-    }
-  }
+const changeEnabled = (id: string, event: Event) => pluginRuntime.setEnabled(id, (event.target as HTMLInputElement).checked);
+const changeSetting = (id: string, key: string, event: Event, type: string) => {
+  const input = event.target as HTMLInputElement | HTMLSelectElement;
+  const value = type === 'boolean' ? (input as HTMLInputElement).checked : type === 'number' ? Number(input.value) : input.value;
+  pluginRuntime.updateSetting(id, key, value);
 };
-
-watch([pluginEnabled, pluginValues], () => {
-  localStorage.setItem(pluginStorageKey, JSON.stringify({ enabled: pluginEnabled.value, values: pluginValues.value }));
-}, { deep: true });
-
-initializePluginSettings();
 
 const appVersion = '0.1.0';
 </script>
@@ -106,7 +85,7 @@ const appVersion = '0.1.0';
               <small>{{ plugin.id }} · API v{{ plugin.apiVersion }}</small>
             </div>
             <label class="switch">
-              <input v-model="pluginEnabled[plugin.id]" type="checkbox">
+              <input :checked="pluginRuntime.states[plugin.id]?.enabled" type="checkbox" @change="changeEnabled(plugin.id, $event)">
               <span class="track" />
               <span class="knob" />
             </label>
@@ -114,14 +93,26 @@ const appVersion = '0.1.0';
           <p v-if="plugin.settings?.description" class="plugin-description">{{ plugin.settings.description }}</p>
           <div v-for="field in plugin.settings?.fields ?? []" :key="field.key" class="row plugin-field">
             <span class="row-label">{{ field.label }}</span>
+            <select
+              v-if="field.type === 'select'"
+              class="text-input"
+              :value="pluginRuntime.values[plugin.id]?.[field.key]"
+              @change="changeSetting(plugin.id, field.key, $event, field.type)"
+            >
+              <option v-for="option in field.options ?? []" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
             <input
-              v-if="field.type !== 'boolean'"
-              v-model="pluginValues[plugin.id][field.key]"
+              v-else-if="field.type !== 'boolean'"
               class="text-input"
               :type="field.type"
+              :value="pluginRuntime.values[plugin.id]?.[field.key]"
+              :min="field.min"
+              :max="field.max"
+              :step="field.step"
+              @change="changeSetting(plugin.id, field.key, $event, field.type)"
             >
             <label v-else class="switch">
-              <input v-model="pluginValues[plugin.id][field.key]" type="checkbox">
+              <input :checked="Boolean(pluginRuntime.values[plugin.id]?.[field.key])" type="checkbox" @change="changeSetting(plugin.id, field.key, $event, field.type)">
               <span class="track" />
               <span class="knob" />
             </label>

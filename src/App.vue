@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { Bug } from 'lucide-vue-next';
 import Sidebar from './components/Sidebar.vue';
 import SheetHost from './components/SheetHost.vue';
 import ToastHost from './components/ToastHost.vue';
+import { pluginRuntime } from './plugins/runtime';
 
 const appName = 'wttch-hub';
 
@@ -34,16 +35,30 @@ const macOS = controls?.platform === 'darwin';
 
 const isMaximized = ref(false);
 let unsubscribe: (() => void) | undefined;
+let releaseRoutePlugin: (() => Promise<void>) | undefined;
+let routeActivation = 0;
 
-onMounted(() => {
+onMounted(async () => {
   // Keep the zoom glyph and rounded corners in sync with the real window state.
   unsubscribe = controls?.onMaximizedChange((maximized) => {
     isMaximized.value = maximized;
   });
+  await pluginRuntime.initialize();
 });
+
+watch(() => route.meta?.pluginId as string | undefined, async (pluginId) => {
+  const activation = ++routeActivation;
+  await releaseRoutePlugin?.();
+  releaseRoutePlugin = undefined;
+  if (!pluginId) return;
+  const acquired = await pluginRuntime.acquire(pluginId, 'route', route.fullPath);
+  if (activation !== routeActivation) await acquired(); else releaseRoutePlugin = acquired;
+}, { immediate: true });
 
 onBeforeUnmount(() => {
   unsubscribe?.();
+  void releaseRoutePlugin?.();
+  void pluginRuntime.shutdown();
 });
 
 const minimize = () => controls?.minimize();
@@ -160,7 +175,10 @@ const onTitleDblClick = (event: MouseEvent) => {
             name="view"
             mode="out-in"
           >
-            <component :is="Component" />
+            <component
+              :is="Component"
+              :key="route.fullPath"
+            />
           </Transition>
         </RouterView>
       </main>

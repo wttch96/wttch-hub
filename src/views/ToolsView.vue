@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router';
 import { ChevronRight, Sparkles } from 'lucide-vue-next';
-import { tools } from '../config/tools';
+import { pluginRuntime } from '../plugins/runtime';
+
+const tools = pluginRuntime.enabledTools;
 </script>
 
 <template>
@@ -153,4 +155,3 @@ import { tools } from '../config/tools';
   font-size: 12px;
 }
 </style>
-

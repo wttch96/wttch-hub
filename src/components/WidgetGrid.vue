@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { Grip, Pin, PinOff, Plus, RotateCcw } from 'lucide-vue-next';
-import { widgetPlugins } from '../config/tools';
+import { Grip, Pin, PinOff, Plus, RotateCcw, X } from 'lucide-vue-next';
+import { pluginRuntime } from '../plugins/runtime';
+import PluginWidgetHost from './PluginWidgetHost.vue';
 
 const columns = 12;
 const gap = 12;
 type WidgetItem = { id: string; x: number; y: number; w: number; h: number; pinned: boolean };
-const defaults: WidgetItem[] = widgetPlugins.map((plugin, index) => ({
+const widgetPlugins = pluginRuntime.enabledWidgets;
+const defaults: WidgetItem[] = widgetPlugins.value.map((plugin, index) => ({
   id: plugin.id,
   x: index * 6,
   y: 0,
@@ -22,7 +24,7 @@ const showLibrary = ref(false);
 const cellWidth = 88;
 const cellHeight = 66;
 
-const pluginFor = (id: string) => widgetPlugins.find((plugin) => plugin.id === id);
+const pluginFor = (id: string) => widgetPlugins.value.find((plugin) => plugin.id === id);
 const minSizeFor = (id: string) => {
   const widget = pluginFor(id)?.widget;
   return { width: widget?.minWidth ?? 3, height: widget?.minHeight ?? 2 };
@@ -45,7 +47,7 @@ const styleFor = (item: WidgetItem) => ({
   height: `${item.h * cellHeight + (item.h - 1) * gap}px`,
 });
 const gridHeight = computed(() => Math.max(1, ...items.value.map((item) => item.y + item.h)));
-const availablePlugins = computed(() => widgetPlugins.filter((plugin) => !items.value.some((item) => item.id === plugin.id)));
+const availablePlugins = computed(() => widgetPlugins.value.filter((plugin) => !items.value.some((item) => item.id === plugin.id)));
 const gridStyle = computed(() => ({
   height: `${gridHeight.value * cellHeight + Math.max(0, gridHeight.value - 1) * gap}px`,
 }));
@@ -98,6 +100,7 @@ const togglePin = (item: WidgetItem) => {
   item.pinned = !item.pinned;
   save();
 };
+const removeWidget = (id: string) => { items.value = items.value.filter((item) => item.id !== id); save(); };
 
 onMounted(() => {
   const stored = localStorage.getItem(storageKey);
@@ -144,10 +147,7 @@ onMounted(() => {
         :style="styleFor(item)"
       >
         <div v-if="!item.pinned" class="widget-drag" title="拖动 Widget" @pointerdown="begin($event, item, 'drag')"><Grip :size="15" /></div>
-        <component
-          :is="pluginFor(item.id)?.widget?.component"
-          :refresh-interval-ms="pluginFor(item.id)?.widget?.refreshIntervalMs"
-        />
+        <PluginWidgetHost :plugin-id="item.id" />
         <span
           v-if="active?.id === item.id && active.mode === 'resize'"
           class="size-indicator"
@@ -163,6 +163,7 @@ onMounted(() => {
           <PinOff v-if="item.pinned" :size="14" />
           <Pin v-else :size="14" />
         </button>
+        <button class="remove" type="button" title="移除 Widget" @pointerdown.stop @click="removeWidget(item.id)"><X :size="14" /></button>
         <button v-if="!item.pinned" class="resize" title="调整大小" type="button" @pointerdown="begin($event, item, 'resize')" />
       </article>
     </div>
@@ -184,11 +185,13 @@ onMounted(() => {
 .empty { padding: 5px; color: var(--text-secondary); font-size: 12px; }
 .widget-grid { position: relative; min-width: 1188px; }
 .widget { position: absolute; overflow: hidden; }
-.widget-drag { position: absolute; z-index: 2; top: 8px; right: 8px; padding: 3px; color: var(--text-secondary); cursor: grab; touch-action: none; }
+.widget-drag { position: absolute; z-index: 2; top: 8px; right: 60px; padding: 3px; color: var(--text-secondary); cursor: grab; touch-action: none; }
 .widget-drag:active { cursor: grabbing; }
 .pin { position: absolute; z-index: 2; top: 8px; right: 34px; display: inline-flex; padding: 4px; border: 0; border-radius: 5px; background: rgba(255, 255, 255, .58); color: var(--text-secondary); cursor: pointer; }
-.pin.is-pinned { right: 8px; }
+.pin.is-pinned { right: 34px; }
 .pin:hover { color: var(--accent); }
+.remove { position: absolute; z-index: 2; top: 8px; right: 8px; display: inline-flex; padding: 4px; border: 0; border-radius: 5px; background: rgba(255, 255, 255, .58); color: var(--text-secondary); cursor: pointer; }
+.remove:hover { color: #ff375f; }
 .resize { position: absolute; z-index: 2; right: 0; bottom: 0; width: 18px; height: 18px; border: 0; background: linear-gradient(135deg, transparent 50%, var(--accent) 50%); cursor: nwse-resize; touch-action: none; }
 .size-indicator { position: absolute; z-index: 3; right: 10px; bottom: 10px; padding: 4px 7px; border: 1px solid rgba(255, 255, 255, .7); border-radius: 5px; background: rgba(29, 29, 31, .78); color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; pointer-events: none; }
 </style>

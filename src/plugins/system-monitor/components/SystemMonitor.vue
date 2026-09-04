@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Activity, Cpu, HardDrive, MemoryStick, Monitor, Wifi } from 'lucide-vue-next';
 import type { SystemStats } from '@wttch-hub/plugin-api';
 
@@ -13,12 +13,18 @@ const refresh = async () => {
   const next = await window.toolHost?.systemStats();
   if (next) stats.value = next;
 };
+const startSampling = () => {
+  clearInterval(timer);
+  void refresh();
+  timer = setInterval(() => void refresh(), Math.max(250, props.refreshIntervalMs));
+};
 const readRate = computed(() => formatRate(stats.value.readBytes));
 const writeRate = computed(() => formatRate(stats.value.writeBytes));
 const downloadRate = computed(() => formatRate(stats.value.downloadBytes));
 const uploadRate = computed(() => formatRate(stats.value.uploadBytes));
 
-onMounted(() => { void refresh(); timer = setInterval(() => void refresh(), props.refreshIntervalMs); });
+onMounted(startSampling);
+watch(() => props.refreshIntervalMs, startSampling);
 onBeforeUnmount(() => clearInterval(timer));
 </script>
 
