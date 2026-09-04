@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Cpu, Monitor } from 'lucide-vue-next';
 import type { SystemStats } from '@wttch-hub/plugin-api';
 
@@ -10,7 +10,13 @@ const refresh = async () => {
   const next = await window.toolHost?.systemStats();
   if (next) stats.value = next;
 };
-onMounted(() => { void refresh(); timer = setInterval(() => void refresh(), props.refreshIntervalMs); });
+const startSampling = () => {
+  clearInterval(timer);
+  void refresh();
+  timer = setInterval(() => void refresh(), Math.max(250, props.refreshIntervalMs));
+};
+onMounted(startSampling);
+watch(() => props.refreshIntervalMs, startSampling);
 onBeforeUnmount(() => clearInterval(timer));
 </script>
 

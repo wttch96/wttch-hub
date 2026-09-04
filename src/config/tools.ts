@@ -46,10 +46,10 @@ const builtinTools: ToolPlugin[] = [
     apiVersion: 1,
     id: 'bitparser',
     path: 'bitparser',
-    name: '位段解析器',
+    name: '16 进制数值解析',
     icon: Braces,
-    desc: '按字段宽度定义位段布局，把二进制报文逐位解析成可读的字段清单。',
-    tags: ['位段', '报文'],
+    desc: '把完整十六进制数值解释为整数、补码或标准 IEEE 754 float / double，并展示计算过程。',
+    tags: ['HEX', 'IEEE 754'],
     tint: ['#ff9f0a', 'rgba(255, 159, 10, 0.13)'],
     flow: true,
     component: () => import('../tools/bitparser/index.vue'),
@@ -64,11 +64,13 @@ const externalPlugins = import.meta.glob('../plugins/*/index.ts', {
   import: 'default',
 }) as Record<string, ToolPlugin>;
 
-export const tools: ToolPlugin[] = [
+export const allTools: ToolPlugin[] = [
   ...builtinTools,
   ...Object.values(externalPlugins),
 ];
 
-export const widgetPlugins = tools.filter((tool) => tool.widget);
+/** @deprecated Prefer pluginRuntime.enabledTools in UI code. */
+export const tools = allTools;
+export const widgetPlugins = allTools.filter((tool) => tool.widget);
 
-export const findTool = (id: string) => tools.find((tool) => tool.id === id);
+export const findTool = (id: string) => allTools.find((tool) => tool.id === id);

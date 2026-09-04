@@ -28,14 +28,47 @@ export interface ToolHostApi {
   systemStats(): Promise<SystemStats>;
 }
 
-/** 插件路由离开时由宿主调用，用于移除事件监听器和定时器。 */
-export type PluginCleanup = () => void;
+export type MaybePromise<T> = T | Promise<T>;
+export interface Disposable { dispose(): void; }
+/** 插件回调可返回清理函数或 VS Code 风格的 Disposable。 */
+export type PluginCleanup = (() => MaybePromise<void>) | Disposable;
+export type PluginActivationReason = 'startup' | 'route' | 'widget' | 'manual';
+export type PluginDeactivationReason = 'route' | 'widget' | 'disabled' | 'uninstalled' | 'shutdown' | 'error';
+
+export interface PluginSettingsApi {
+  get<T extends boolean | number | string>(key: string, fallback?: T): T | undefined;
+  update(key: string, value: boolean | number | string): void;
+  onDidChange(listener: (key: string, value: boolean | number | string) => void): Disposable;
+}
+
+export interface PluginStorageApi {
+  get<T>(key: string, fallback?: T): T | undefined;
+  update<T>(key: string, value: T): void;
+  delete(key: string): void;
+}
+
+export interface PluginUiApi {
+  showToast(message: string, kind?: 'info' | 'success' | 'error', duration?: number): number;
+  dismissToast(id: number): void;
+  openSheet(options: { title?: string; component?: Component; props?: Record<string, unknown> }): void;
+  closeSheet(): void;
+}
 
 /** 插件激活回调收到的上下文，后续可继续扩展宿主能力。 */
 export interface PluginActivationContext {
   host: ToolHostApi;
   path: string;
+  reason: PluginActivationReason;
+  /** push 进来的资源会在插件卸载时按逆序自动 dispose。 */
+  subscriptions: Disposable[];
+  settings: PluginSettingsApi;
+  storage: PluginStorageApi;
+  ui: PluginUiApi;
 }
+
+export type PluginLifecycleContext = Omit<PluginActivationContext, 'reason'> & {
+  reason: PluginActivationReason | PluginDeactivationReason;
+};
 
 export interface PluginManifest {
   /** 必须与宿主支持的 PLUGIN_API_VERSION 匹配。 */
@@ -73,6 +106,13 @@ export const definePluginPackage = (definition: PluginPackageDefinition): Plugin
 /** ZIP 被宿主识别后展示给插件管理页面的数据。 */
 export interface PluginPackageInfo extends PluginManifest {
   file: string;
+  removable?: boolean;
+  source?: 'managed' | 'workspace';
+}
+
+export interface PluginInstallResult {
+  installed: PluginPackageInfo[];
+  cancelled?: boolean;
 }
 
 export interface ToolPlugin {
@@ -88,10 +128,19 @@ export interface ToolPlugin {
   flow?: boolean;
   component: ComponentLoader;
   events?: {
-    /** 路由激活时调用；返回的清理函数会在离开插件时执行。 */
-    activate?: (context: PluginActivationContext) => void | PluginCleanup;
+    /** 首次启用时调用一次，适合注册命令、监听器和全局资源。 */
+    load?: (context: PluginLifecycleContext) => MaybePromise<void | PluginCleanup>;
+    /** 首个页面或 Widget 使用插件时调用。 */
+    activate?: (context: PluginActivationContext) => MaybePromise<void | PluginCleanup>;
+    /** 最后一个使用者离开后调用。 */
+    deactivate?: (context: PluginLifecycleContext) => MaybePromise<void>;
+    /** 禁用、卸载或宿主退出前调用。 */
+    unload?: (context: PluginLifecycleContext) => MaybePromise<void>;
+    /** 设置字段发生变化后调用。 */
+    settingsChanged?: (context: PluginLifecycleContext, key: string, value: boolean | number | string) => MaybePromise<void>;
   };
   capabilities?: {
+    systemStats?: boolean;
     toast?: boolean;
     sheet?: boolean;
   };
@@ -106,8 +155,13 @@ export interface ToolPlugin {
     fields?: Array<{
       key: string;
       label: string;
-      type: 'boolean' | 'number' | 'text';
+      description?: string;
+      type: 'boolean' | 'number' | 'text' | 'color' | 'select';
       defaultValue: boolean | number | string;
+      min?: number;
+      max?: number;
+      step?: number;
+      options?: Array<{ label: string; value: string | number }>;
     }>;
   };
   widget?: {

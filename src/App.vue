@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { Bug } from 'lucide-vue-next';
 import Sidebar from './components/Sidebar.vue';
 import SheetHost from './components/SheetHost.vue';
 import ToastHost from './components/ToastHost.vue';
+import { pluginRuntime } from './plugins/runtime';
 
 const appName = 'wttch-hub';
 
@@ -34,16 +35,30 @@ const macOS = controls?.platform === 'darwin';
 
 const isMaximized = ref(false);
 let unsubscribe: (() => void) | undefined;
+let releaseRoutePlugin: (() => Promise<void>) | undefined;
+let routeActivation = 0;
 
-onMounted(() => {
+onMounted(async () => {
   // Keep the zoom glyph and rounded corners in sync with the real window state.
   unsubscribe = controls?.onMaximizedChange((maximized) => {
     isMaximized.value = maximized;
   });
+  await pluginRuntime.initialize();
 });
+
+watch(() => route.meta?.pluginId as string | undefined, async (pluginId) => {
+  const activation = ++routeActivation;
+  await releaseRoutePlugin?.();
+  releaseRoutePlugin = undefined;
+  if (!pluginId) return;
+  const acquired = await pluginRuntime.acquire(pluginId, 'route', route.fullPath);
+  if (activation !== routeActivation) await acquired(); else releaseRoutePlugin = acquired;
+}, { immediate: true });
 
 onBeforeUnmount(() => {
   unsubscribe?.();
+  void releaseRoutePlugin?.();
+  void pluginRuntime.shutdown();
 });
 
 const minimize = () => controls?.minimize();
@@ -160,7 +175,10 @@ const onTitleDblClick = (event: MouseEvent) => {
             name="view"
             mode="out-in"
           >
-            <component :is="Component" />
+            <component
+              :is="Component"
+              :key="route.fullPath"
+            />
           </Transition>
         </RouterView>
       </main>
@@ -199,13 +217,6 @@ const onTitleDblClick = (event: MouseEvent) => {
   color: var(--text);
 }
 
-.window.is-macos {
-  --window-bg: rgba(242, 242, 243, 0.54);
-  --content-bg: rgba(242, 242, 243, 0.42);
-  --card-bg: rgba(255, 255, 255, 0.48);
-  --sidebar-bg: rgba(255, 255, 255, 0.18);
-}
-
 /* The window is transparent; rounding the root makes an irregular shape. */
 .window.is-custom {
   border-radius: 12px;
@@ -223,7 +234,7 @@ const onTitleDblClick = (event: MouseEvent) => {
   /* Whole bar can move the window; the buttons below opt back out. */
   -webkit-app-region: drag;
   user-select: none;
-  background: rgba(242, 242, 243, 0.42);
+  background: var(--theme-titlebar-bg);
   -webkit-backdrop-filter: blur(22px) saturate(125%);
   backdrop-filter: blur(22px) saturate(125%);
   border-bottom: 1px solid var(--hairline);
@@ -232,7 +243,7 @@ const onTitleDblClick = (event: MouseEvent) => {
 .window.is-macos .titlebar {
   padding-left: 76px;
   padding-right: 76px;
-  background: rgba(242, 242, 243, 0.34);
+  background: var(--theme-titlebar-bg);
 }
 
 .title {
@@ -243,7 +254,7 @@ const onTitleDblClick = (event: MouseEvent) => {
   text-overflow: ellipsis;
   font-size: 13px;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.55);
+  color: var(--text-secondary);
 }
 
 .traffic-lights {
@@ -347,9 +358,9 @@ const onTitleDblClick = (event: MouseEvent) => {
   justify-content: space-between;
   gap: 12px;
   padding: 0 8px 0 12px;
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--sidebar-bg);
   border-top: 1px solid var(--hairline);
-  color: rgba(0, 0, 0, 0.55);
+  color: var(--text-secondary);
   font-size: 11px;
   user-select: none;
 }
@@ -379,10 +390,10 @@ const onTitleDblClick = (event: MouseEvent) => {
   cursor: pointer;
 }
 .status-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--accent-weak);
 }
 .status-btn:active {
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--hairline);
 }
 
 </style>

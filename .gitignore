@@ -93,3 +93,6 @@ out/
 
 # Generated plugin bundles and installed development type snapshots
 plugins/*.zip
+# The reference external plugin is intentionally versioned as a distributable.
+!plugins/wttch-hub@plugins-1.0.0.zip
+src/plugins/plugin-api.d.ts

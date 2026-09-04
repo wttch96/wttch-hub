@@ -94,7 +94,7 @@ onBeforeUnmount(() => cleanup?.());
   gap: 14px;
   padding: 0 16px;
   border-bottom: 1px solid var(--hairline);
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--sidebar-bg);
   user-select: none;
 }
 
@@ -113,7 +113,7 @@ onBeforeUnmount(() => cleanup?.());
 }
 
 .tool-back:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--accent-weak);
 }
 
 .tool-title {

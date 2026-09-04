@@ -11,7 +11,22 @@ export default defineToolPlugin({
   tags: ['CPU', 'GPU', '内存', 'IO'],
   tint: ['#ff375f', 'rgba(255, 55, 95, 0.12)'],
   component: () => import('./components/SystemMonitor.vue'),
-  capabilities: { toast: true, sheet: true },
+  capabilities: { systemStats: true, toast: true, sheet: true },
+  events: {
+    load(context) {
+      // VS Code 风格：放入 subscriptions 的资源由宿主在卸载时统一释放。
+      context.subscriptions.push(context.settings.onDidChange((key, value) => {
+        if (key === 'refreshIntervalMs') context.ui.showToast(`系统监控刷新间隔已更新为 ${value} ms`, 'success');
+      }));
+    },
+    activate() {
+      // 页面和 Widget 共用引用计数；第一个消费者出现时激活，最后一个离开时清理。
+      return { dispose() { /* 组件自身会释放采样定时器。 */ } };
+    },
+    deactivate() { /* 可在这里暂停插件级后台任务。 */ },
+    unload() { /* subscriptions 将在此回调后由宿主自动释放。 */ },
+    settingsChanged() { /* 复杂插件可在这里重建服务；示例组件通过 props 获取间隔。 */ },
+  },
   statusbar: { label: '系统监控', color: '#ff375f' },
   settings: {
     description: '控制系统监控的启用状态和刷新频率。',

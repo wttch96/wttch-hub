@@ -114,14 +114,14 @@ const collapsed = ref(false);
 }
 
 .nav-item:hover {
-  background: rgba(0, 0, 0, 0.055);
+  background: var(--accent-weak);
   color: var(--text);
 }
 
 /* vue-router's active class: macOS-style tinted pill. */
 .nav-item.router-link-active {
-  background: rgba(10, 132, 255, 0.16);
-  color: #0060c0;
+  background: var(--accent-weak);
+  color: var(--accent);
 }
 
 .nav-icon {
@@ -158,7 +158,7 @@ const collapsed = ref(false);
 }
 
 .collapse-btn:hover {
-  background: rgba(0, 0, 0, 0.055);
+  background: var(--accent-weak);
   color: var(--text);
 }
 

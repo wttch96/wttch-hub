@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, net } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, net } from 'electron';
 import 'dotenv/config';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -14,32 +14,55 @@ type PluginPackageInfo = {
   entry: string;
   file: string;
   capabilities?: string[];
+  removable?: boolean;
+  source?: 'managed' | 'workspace';
 };
 type PluginBundle = { apiVersion: number; plugins: Omit<PluginPackageInfo, 'file'>[] };
 
-const loadPluginPackages = (): PluginPackageInfo[] => {
-  const pluginsDir = path.join(process.cwd(), 'plugins');
-  if (!fs.existsSync(pluginsDir)) return [];
-  return fs.readdirSync(pluginsDir)
+const pluginDirectories = () => [
+  { directory: path.join(app.getPath('userData'), 'plugins'), source: 'managed' as const, removable: true },
+  { directory: path.join(process.cwd(), 'plugins'), source: 'workspace' as const, removable: false },
+];
+const isSafePluginEntry = (entry: string) => {
+  const normalized = path.posix.normalize(entry.replaceAll('\\', '/'));
+  return normalized !== '.' && normalized !== '..' && !normalized.startsWith('../') && !path.posix.isAbsolute(normalized);
+};
+const readPluginPackage = (archivePath: string, meta: { source: 'managed' | 'workspace'; removable: boolean }): PluginPackageInfo[] => {
+  const file = path.basename(archivePath);
+  try {
+    if (fs.statSync(archivePath).size > 50 * 1024 * 1024) throw new Error('插件包超过 50 MB 限制');
+    const archive = unzipSync(new Uint8Array(fs.readFileSync(archivePath)));
+    if (Object.values(archive).reduce((total, bytes) => total + bytes.byteLength, 0) > 100 * 1024 * 1024) {
+      throw new Error('插件包解压后超过 100 MB 限制');
+    }
+    const packageFile = archive['package.json'];
+    if (!packageFile) throw new Error('ZIP 根目录缺少 package.json');
+    const bundle = JSON.parse(strFromU8(packageFile)) as PluginBundle;
+    if (bundle.apiVersion !== 1 || !Array.isArray(bundle.plugins)) throw new Error('插件 API 版本不兼容');
+    const plugins = bundle.plugins;
+    if (!plugins.length || !plugins.every((plugin) => plugin.apiVersion === 1
+      && /^[a-z0-9][a-z0-9-]*$/.test(plugin.id)
+      && Boolean(plugin.version && plugin.name && plugin.entry)
+      && isSafePluginEntry(plugin.entry))) throw new Error('包中包含无效插件定义');
+    if (new Set(plugins.map((plugin) => plugin.id)).size !== plugins.length) throw new Error('包中存在重复插件 ID');
+    return plugins.map((plugin) => ({ ...plugin, file, ...meta }));
+  } catch (error) {
+    throw new Error(`${file}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+};
+const loadPluginPackages = (): PluginPackageInfo[] => pluginDirectories().flatMap(({ directory, ...meta }) => {
+  if (!fs.existsSync(directory)) return [];
+  return fs.readdirSync(directory)
     .filter((file) => file.endsWith('.zip'))
     .flatMap((file) => {
       try {
-        const archive = unzipSync(new Uint8Array(fs.readFileSync(path.join(pluginsDir, file))));
-        const packageFile = archive['package.json'];
-        if (!packageFile) return [];
-        const bundle = JSON.parse(strFromU8(packageFile)) as PluginBundle;
-        if (bundle.apiVersion !== 1 || !Array.isArray(bundle.plugins)) return [];
-        return bundle.plugins
-          .filter((plugin) => plugin.apiVersion === 1 && plugin.id && plugin.version && plugin.name && plugin.entry)
-          .map((plugin) => ({ ...plugin, file: path.join('plugins', file) }));
+        return readPluginPackage(path.join(directory, file), meta);
       } catch (error) {
         console.warn(`[plugins] ignored ${file}: ${error instanceof Error ? error.message : String(error)}`);
         return [];
       }
     });
-};
-
-const pluginPackages = loadPluginPackages();
+});
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -80,9 +103,34 @@ const IPC = {
   maximizedChanged: 'win:maximized-changed',
   systemStats: 'system:stats',
   pluginPackages: 'plugins:list',
+  pluginInstall: 'plugins:install',
+  pluginRemove: 'plugins:remove',
 } as const;
 
-ipcMain.handle(IPC.pluginPackages, () => pluginPackages);
+ipcMain.handle(IPC.pluginPackages, () => loadPluginPackages());
+ipcMain.handle(IPC.pluginInstall, async () => {
+  const result = await dialog.showOpenDialog({
+    title: '加载 wttch-hub 插件包',
+    properties: ['openFile'],
+    filters: [{ name: 'wttch-hub 插件包', extensions: ['zip'] }],
+  });
+  if (result.canceled || !result.filePaths[0]) return { installed: [], cancelled: true };
+  const source = result.filePaths[0];
+  // 全量解析校验成功后才复制，避免半安装状态；同名包视为更新。
+  readPluginPackage(source, { source: 'managed', removable: true });
+  const managedDirectory = pluginDirectories()[0].directory;
+  fs.mkdirSync(managedDirectory, { recursive: true });
+  const destination = path.join(managedDirectory, path.basename(source));
+  if (path.resolve(source) !== path.resolve(destination)) fs.copyFileSync(source, destination);
+  return { installed: readPluginPackage(destination, { source: 'managed', removable: true }) };
+});
+ipcMain.handle(IPC.pluginRemove, (_event, file: string) => {
+  const managedDirectory = pluginDirectories()[0].directory;
+  const target = path.join(managedDirectory, path.basename(file));
+  if (path.dirname(target) !== managedDirectory || !target.endsWith('.zip')) throw new Error('无效的插件包路径');
+  if (fs.existsSync(target)) fs.unlinkSync(target);
+  return loadPluginPackages();
+});
 
 ipcMain.handle(IPC.systemStats, async () => {
   const [load, memory, io, networkInterface] = await Promise.all([

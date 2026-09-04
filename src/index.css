@@ -1,13 +1,39 @@
 :root {
   color-scheme: light;
-  --accent: #0a84ff;
-  --window-bg: rgba(242, 242, 243, 0.72);
-  --content-bg: rgba(242, 242, 243, 0.58);
-  --sidebar-bg: rgba(0, 0, 0, 0.05);
-  --card-bg: rgba(255, 255, 255, 0.58);
-  --hairline: rgba(0, 0, 0, 0.08);
-  --text: #1d1d1f;
-  --text-secondary: #6e6e73;
+  /* Public theme contract. Theme plugins only write --theme-* tokens; the
+     aliases below keep hub views and imported labs tools in sync. */
+  --theme-accent: #0a84ff;
+  --theme-accent-weak: rgba(10, 132, 255, 0.12);
+  --theme-window-bg: rgba(242, 242, 243, 0.9);
+  --theme-content-bg: rgba(242, 242, 243, 0.78);
+  --theme-sidebar-bg: rgba(231, 231, 234, 0.72);
+  --theme-card-bg: rgba(255, 255, 255, 0.76);
+  --theme-panel: #ffffff;
+  --theme-border: #d7d7db;
+  --theme-hairline: rgba(215, 215, 219, 0.65);
+  --theme-text: #1d1d1f;
+  --theme-muted: #6e6e73;
+  --theme-success: #34c759;
+  --theme-warning: #ff9f0a;
+  --theme-danger: #ff375f;
+  --theme-titlebar-bg: rgba(242, 242, 243, 0.68);
+
+  --accent: var(--theme-accent);
+  --accent-weak: var(--theme-accent-weak);
+  --window-bg: var(--theme-window-bg);
+  --content-bg: var(--theme-content-bg);
+  --sidebar-bg: var(--theme-sidebar-bg);
+  --card-bg: var(--theme-card-bg);
+  --panel: var(--theme-panel);
+  --border: var(--theme-border);
+  --hairline: var(--theme-hairline);
+  --text: var(--theme-text);
+  --text-secondary: var(--theme-muted);
+  --muted: var(--theme-muted);
+  --bg: var(--theme-content-bg);
+  --success: var(--theme-success);
+  --warning: var(--theme-warning);
+  --danger: var(--theme-danger);
 }
 
 *,

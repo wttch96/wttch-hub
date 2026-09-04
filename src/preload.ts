@@ -38,6 +38,8 @@ contextBridge.exposeInMainWorld('windowControls', windowControls);
 contextBridge.exposeInMainWorld('toolHost', {
   systemStats: toolHost.stats,
   pluginPackages: () => ipcRenderer.invoke('plugins:list'),
+  installPluginPackage: () => ipcRenderer.invoke('plugins:install'),
+  removePluginPackage: (file: string) => ipcRenderer.invoke('plugins:remove', file),
 });
 
 // folderart's online icon-font search needs a same-origin proxy to iconfont.cn

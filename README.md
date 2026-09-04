@@ -17,7 +17,7 @@
 | `/tools/folderart` | 图标生成器 | 把图片变成 macOS / Windows 风格文件夹图标（PNG 导出） |
 | `/tools/packetdraw` | 协议绘制器 | 用文本描述渲染网络协议时序图（SVG / PNG） |
 | `/tools/radixconv` | 进制转换器 | 2 / 8 / 10 / 16 进制大数互转与位运算 |
-| `/tools/bitparser` | 位段解析器 | 按位段定义逐位解析二进制报文 |
+| `/tools/bitparser` | 16 进制数值解析 | 将完整 HEX 解析为整数、补码或标准 IEEE 754 float / double |
 
 ## 技术栈
 
@@ -28,9 +28,25 @@
 
 ## 插件
 
-工具通过 `src/types/plugin.ts` 中版本化的 `ToolPlugin` API 声明（当前 `apiVersion: 1`）。内置工具注册在 `src/config/tools.ts`；放入 `src/plugins/<id>/index.ts` 的插件会由 `import.meta.glob` 自动发现，并按声明生成工具路由、主页 Widget 和 statusbar。插件组件通过 `window.toolHost` 使用宿主能力，例如 `window.toolHost?.systemStats()`，不直接访问 Electron IPC。
+工具通过 `src/types/plugin.ts` 中版本化的 `ToolPlugin` API 声明（当前 `apiVersion: 1`）。内置工具注册在 `src/config/tools.ts`；放入 `src/plugins/<id>/index.ts` 的插件会由 `import.meta.glob` 自动发现，并按声明生成工具路由、主页 Widget、statusbar 和设置表单。`src/plugins/runtime.ts` 是统一状态机，负责加载、引用计数激活、停用、卸载、错误隔离、设置事件以及插件私有存储。插件组件通过 `window.toolHost` 使用宿主能力，例如 `window.toolHost?.systemStats()`，不直接访问 Electron IPC。
 
-当前系统监控源码位于 `src/plugins/system-monitor/`，同时提供系统监控页面与 CPU / GPU Widget，作为外置插件示例。插件包定义写在各自的 `package.ts` 中；运行 `npm run install:plugin-api` 会先卸载旧版本，再将最新的 `@wttch-hub/plugin-api` 安装到 `node_modules`，插件通过包名直接导入宿主 API 类型和定义函数。插件集合 ZIP 由独立的外部打包流程生成，`npm run install:plugins` 可将集合包整体安装或更新到 `src/plugins/`。Electron 启动时会扫描插件集合 ZIP，解析并校验包定义，通过 `window.toolHost.pluginPackages()` 提供已识别的插件包信息。
+系统监控和主题配置源码位于 `src/plugins/`，分别示范 Widget/系统能力与主题 token/颜色设置。插件包定义写在各自的 `package.ts` 中；运行 `npm run install:plugin-api` 会先卸载旧版本，再将最新的 `@wttch-hub/plugin-api` 安装到 `node_modules`，插件通过包名直接导入宿主 API 类型和定义函数。插件集合 ZIP 由独立的外部打包流程生成，`npm run install:plugins` 可将集合包整体安装或更新到 `src/plugins/`。插件页面还可以用系统文件选择器把 ZIP 加载到 Electron `userData/plugins` 仓库，主进程会限制包体积、验证 API 版本、ID、入口路径和重复 ID；托管仓库中的包可以删除。
+
+### 生命周期与宿主 API
+
+生命周期顺序与 VS Code 的扩展模型相近：`load → activate → deactivate → unload`。启用插件触发 `load`；首次打开工具页或挂载 Widget 时触发 `activate`；页面和 Widget 都释放后触发 `deactivate`；禁用、卸载或应用退出时触发 `unload`。回调可以是异步函数，`load`/`activate` 可以返回清理函数或 `{ dispose() }`。插件放进 `context.subscriptions` 的资源会在卸载时按逆序自动释放。
+
+`PluginActivationContext` 提供以下受控能力：
+
+- `host`：主进程能力代理，目前包含系统统计数据。
+- `ui`：Toast 和 Sheet UI，不需要插件直接操作宿主组件。
+- `settings`：读取、更新设置并订阅变化；声明式字段支持 boolean、number、text 和 select。
+- `storage`：按插件 ID 隔离并持久化的键值存储。
+- `subscriptions`：VS Code 风格的 Disposable 集合。
+
+插件管理页展示 `加载中 / 已加载 / 激活中 / 运行中 / 已禁用 / 错误` 状态，并提供打开、设置、启用/禁用和删除操作。禁用会立即从工具库、路由和 Widget 库移除，并执行清理。Widget 支持添加、移除、拖动、缩放、固定和布局持久化。
+
+> Vue SFC/TypeScript 插件必须参与 Vite 编译。应用内“加载 ZIP”负责可信包仓库和清单管理；如果包中的插件 ID 尚未编译进当前应用，管理页会显示“待编译”。开发时将包放入项目 `plugins/`，运行 `npm run install:plugins` 后重新构建。宿主不会把任意 ZIP 源码当作 JavaScript 直接执行。
 
 ## 快速开始
 
@@ -50,6 +66,7 @@ npm start
 | `npm run make` | 生成平台安装包 |
 | `npm run publish` | 发布 |
 | `npm run lint` | ESLint 检查（`.ts` / `.tsx` / `.vue`） |
+| `npm run pack:plugins` | 将系统监控源码打成 `plugins/wttch-hub@plugins-1.0.0.zip` |
 
 ### 插件开发流程
 
@@ -82,6 +99,8 @@ export default definePluginPackage({
 工具入口在同一个目录中使用 `defineToolPlugin(...)` 导出。宿主会自动扫描 `src/plugins`，并根据声明生成工具路由、Widget、状态栏和设置入口。插件需要系统数据时，通过 `window.toolHost` 使用宿主能力，不要直接导入 Electron 或访问 IPC。
 
 插件 API 更新后，重新运行 `npm run install:plugin-api`；开发服务器需要重启才能重新解析依赖。插件的启用状态和配置由宿主设置页管理，路由切换时宿主会执行插件事件回调返回的 cleanup 函数。
+
+系统监控与主题配置作为完整的外置插件示例发布。修改 `src/plugins/system-monitor/` 或 `src/plugins/theme/` 后运行 `npm run pack:plugins`，会将入口、Vue 页面、Widget、主题定义、包清单和插件 API 类型快照压缩到 `plugins/wttch-hub@plugins-1.0.0.zip`。在一份没有已安装源码的工作区中，把该 ZIP 放入 `plugins/` 并运行 `npm run install:plugins`，即可恢复插件源码后参与构建。
 
 ### 开发诊断
 

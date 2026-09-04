@@ -35,6 +35,8 @@ interface Window {
   toolHost?: {
     systemStats(): Promise<import('./types/plugin').SystemStats>;
     pluginPackages(): Promise<import('./types/plugin').PluginPackageInfo[]>;
+    installPluginPackage(): Promise<import('./types/plugin').PluginInstallResult>;
+    removePluginPackage(file: string): Promise<import('./types/plugin').PluginPackageInfo[]>;
   };
 
   /** Present inside Electron: forwards folderart's icon-font search to main. */
