@@ -1,3 +1,7 @@
+<!--
+  文件说明：展示工作台首页的常用入口与 Widget 网格，为用户提供工具和设置的快捷访问。
+-->
+
 <script setup lang="ts">
 import { PanelBottom, Settings, Wrench } from 'lucide-vue-next';
 import WidgetGrid from '../components/WidgetGrid.vue';

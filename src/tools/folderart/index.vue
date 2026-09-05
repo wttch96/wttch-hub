@@ -1,3 +1,7 @@
+<!--
+  文件说明：组合文件夹图标工具的模板选择、参数控制、图标搜索、实时预览和下载区域。
+-->
+
 <script setup lang="ts">
 // FolderArt tool page — the icon generator, self-contained.
 import { onUnmounted } from 'vue'

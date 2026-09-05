@@ -1,3 +1,7 @@
+/**
+ * 文件说明：将当前图标配置渲染为画布，生成 PNG 或多尺寸 ICNS，并管理文件名与下载状态。
+ */
+
 // Download helpers: PNG (1024) and ICNS (multi-size).
 import { ref } from 'vue'
 import { renderComposition } from '@/tools/folderart/composables/useFolderComposition'

@@ -1,3 +1,7 @@
+<!--
+  文件说明：提供在线图标搜索、风格筛选和结果浏览界面，将选中的图标交给合成配置。
+-->
+
 <script setup lang="ts">
 import { onUnmounted, ref } from 'vue'
 import { config, setIcon, setIconType } from '@/tools/folderart/composables/useConfig'

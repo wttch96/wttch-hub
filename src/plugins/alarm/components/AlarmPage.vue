@@ -1,3 +1,7 @@
+<!--
+  文件说明：提供闹钟创建、启停与删除界面，展示提醒列表和下一次触发时间。
+-->
+
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, reactive, ref } from 'vue';
 import { AlarmClock, Bell, CalendarClock, Clock3, Maximize2, Power, Trash2 } from 'lucide-vue-next';

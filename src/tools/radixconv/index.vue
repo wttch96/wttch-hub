@@ -1,3 +1,7 @@
+<!--
+  文件说明：实现进制转换工具，提供常用数字进制之间的输入、校验和转换结果展示。
+-->
+
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 

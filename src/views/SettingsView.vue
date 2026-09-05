@@ -1,12 +1,19 @@
+<!--
+  文件说明：组织通用偏好、桌面数据管理、AI、微信订阅、导航和插件设置等配置界面。
+-->
+
 <script setup lang="ts">
 import { ref } from 'vue';
+import NavigationSettings from '../components/NavigationSettings.vue';
+import AiSettings from '../components/AiSettings.vue';
+import DesktopSettings from '../components/DesktopSettings.vue';
+import WechatSettings from '../components/WechatSettings.vue';
 import { ChevronRight } from 'lucide-vue-next';
 import { allTools as tools } from '../config/tools';
 import { pluginRuntime } from '../plugins/runtime';
 
 // UI 骨架阶段的占位开关，后续再接到真实的持久化配置上。
 const startOnHome = ref(true);
-const launchToTray = ref(false);
 const autoCheckUpdate = ref(true);
 const changeEnabled = (id: string, event: Event) => pluginRuntime.setEnabled(id, (event.target as HTMLInputElement).checked);
 const changeSetting = (id: string, key: string, event: Event, type: string) => {
@@ -44,17 +51,6 @@ const appVersion = '0.1.0';
           </label>
         </div>
         <div class="row">
-          <span class="row-label">关闭窗口时最小化到托盘</span>
-          <label class="switch">
-            <input
-              v-model="launchToTray"
-              type="checkbox"
-            >
-            <span class="track" />
-            <span class="knob" />
-          </label>
-        </div>
-        <div class="row">
           <span class="row-label">自动检查更新</span>
           <label class="switch">
             <input
@@ -67,6 +63,11 @@ const appVersion = '0.1.0';
         </div>
       </div>
     </div>
+
+    <DesktopSettings />
+    <AiSettings />
+    <WechatSettings />
+    <NavigationSettings />
 
     <div id="plugins" class="group plugin-settings">
       <h3 class="group-title">插件配置</h3>

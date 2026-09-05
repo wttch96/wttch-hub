@@ -1,3 +1,7 @@
+/**
+ * 文件说明：定义主页、设置、插件、工具和浮动 Widget 的路由，配置页面元信息及工具访问规则。
+ */
+
 import { createRouter, createWebHashHistory } from 'vue-router';
 import HomeView from './views/HomeView.vue';
 import ToolsArea from './views/ToolsArea.vue';
@@ -10,11 +14,8 @@ import { pluginRuntime } from './plugins/runtime';
 import PluginToolHost from './components/PluginToolHost.vue';
 import PluginFloatingWidgetHost from './components/PluginFloatingWidgetHost.vue';
 
-// The imported wttch-labs tools are embedded as nested routes under /tools:
-// /tools is the tool-library page, each tool opens on its own child route so the
-// sidebar keeps its three top-level entries (主页 / 小工具 / 设置).
-// `createWebHashHistory` is used so routing keeps working when the packaged
-// app is loaded from the filesystem (file://) instead of a dev server.
+// 工具库与插件导航共用 /tools 下的子路由；导航重命名不会改变路由或插件 ID。
+// hash 路由兼容开发服务器与打包后的 file:// 加载方式。
 const router = createRouter({
   history: createWebHashHistory(),
   routes: [

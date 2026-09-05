@@ -1,3 +1,7 @@
+<!--
+  文件说明：展示插件运行状态与安装包信息，提供插件启用、禁用、加载和移除等管理操作。
+-->
+
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { Check, ChevronRight, Package, Settings2, Power, PowerOff, Trash2, Upload } from 'lucide-vue-next';
@@ -17,6 +21,7 @@ const hostAvailable = Boolean(window.toolHost);
 const packageFor = (id: string) => packages.value.find((item) => item.id === id);
 const packageOnly = computed(() => packages.value.filter((item) => !tools.some((tool) => tool.id === item.id)));
 const capabilitiesFor = (plugin: typeof tools[number]) => [
+  ...(plugin.capabilities?.ai ? ['AI'] : []),
   '工具页面',
   ...(plugin.widget ? ['Widget'] : []),
   ...(plugin.statusbar ? ['状态栏'] : []),

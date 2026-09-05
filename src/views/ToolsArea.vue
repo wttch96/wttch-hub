@@ -1,3 +1,7 @@
+<!--
+  文件说明：提供工具库与工具详情共用的嵌套路由布局，管理返回入口以及工具页面的滚动方式。
+-->
+
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';

@@ -1,3 +1,7 @@
+<!--
+  文件说明：提供主题预设、明暗模式和自定义颜色编辑界面，并实时更新工作台外观。
+-->
+
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Check, Moon, Palette, Sun } from 'lucide-vue-next';

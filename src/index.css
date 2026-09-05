@@ -1,3 +1,7 @@
+/**
+ * 文件说明：定义工作台全局视觉样式，包括窗口外观、页面布局、通用卡片和交互控件的基础样式。
+ */
+
 :root {
   color-scheme: light;
   /* Public theme contract. Theme plugins only write --theme-* tokens; the

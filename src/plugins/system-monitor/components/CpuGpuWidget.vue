@@ -1,3 +1,7 @@
+<!--
+  文件说明：在首页 Widget 中展示 CPU 和 GPU 使用率，使用宿主统计接口获取系统数据。
+-->
+
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Cpu, Monitor } from 'lucide-vue-next';

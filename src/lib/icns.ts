@@ -1,3 +1,7 @@
+/**
+ * 文件说明：在浏览器中缩放画布并封装多尺寸 ICNS 图标，同时提供生成文件的下载辅助函数。
+ */
+
 // Minimal ICNS packer: downscales a 1024×1024 master canvas to the standard
 // sizes and packs them as PNG-compressed ICNS chunks. Pure browser JS, no deps.
 

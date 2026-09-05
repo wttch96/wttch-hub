@@ -1,9 +1,14 @@
+<!--
+  文件说明：工作台根组件，组织导航、工具页面、聊天抽屉与提示层，并协调主窗口和浮动窗口的插件生命周期。
+-->
+
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { Bug } from 'lucide-vue-next';
 import Sidebar from './components/Sidebar.vue';
 import SheetHost from './components/SheetHost.vue';
+import AiChatDrawer from './components/AiChatDrawer.vue';
 import ToastHost from './components/ToastHost.vue';
 import { pluginRuntime } from './plugins/runtime';
 
@@ -225,6 +230,7 @@ const onTitleDblClick = (event: MouseEvent) => {
 
     <ToastHost />
     <SheetHost />
+    <AiChatDrawer />
   </div>
 </template>
 

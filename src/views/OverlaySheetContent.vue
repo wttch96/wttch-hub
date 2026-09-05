@@ -1,3 +1,7 @@
+<!--
+  文件说明：提供 Sheet 示例面板的实际内容，演示面板内触发 Toast 以及主动关闭面板。
+-->
+
 <script setup lang="ts">
 import { Sparkles } from 'lucide-vue-next';
 import { useSheet } from '../composables/useSheet';

@@ -1,3 +1,5 @@
+// 文件说明：提供 VS Code 调试启动配置，用于启动或附加 Electron 开发进程并映射源码断点。
+
 {
   "version": "0.2.0",
   "configurations": [

@@ -1,3 +1,7 @@
+<!--
+  文件说明：展示可用文件夹或磁盘模板及颜色变体，供用户切换图标底板样式。
+-->
+
 <script setup lang="ts">
 import { config, setStyle, setVariant } from '@/tools/folderart/composables/useConfig'
 import { getStyles } from '@/tools/folderart/composables/useFolderComposition'

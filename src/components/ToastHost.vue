@@ -1,3 +1,7 @@
+<!--
+  文件说明：渲染全局 Toast 消息列表，将共享提示状态展示为可关闭的临时反馈。
+-->
+
 <script setup lang="ts">
 import { Check, CircleAlert, Info, X } from 'lucide-vue-next';
 import { useToast } from '../composables/useToast';

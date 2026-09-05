@@ -1,3 +1,7 @@
+<!--
+  文件说明：管理首页 Widget 的添加、移除、拖动、缩放和固定，并保存和恢复网格布局。
+-->
+
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { Grip, Pin, PinOff, Plus, RotateCcw, X } from 'lucide-vue-next';

@@ -1,3 +1,7 @@
+/**
+ * 文件说明：声明系统监控插件的页面入口、能力、生命周期及设置，将插件实现接入工作台运行时。
+ */
+
 import { Cpu } from 'lucide-vue-next';
 import { defineToolPlugin } from '@wttch-hub/plugin-api';
 
@@ -5,6 +9,7 @@ export default defineToolPlugin({
   apiVersion: 1,
   id: 'system-monitor',
   path: 'system-monitor',
+  navigation: { defaultVisible: false, order: 30 },
   name: '系统监控',
   icon: Cpu,
   desc: '实时查看 CPU、显卡、内存和磁盘 IO，快速掌握当前机器状态。',

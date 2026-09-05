@@ -1,4 +1,12 @@
+/**
+ * 文件说明：管理插件的加载、激活、禁用和资源清理，持久化设置与存储，并向组件注入宿主能力。
+ */
+
 import { computed, reactive, readonly } from 'vue';
+import { createPluginServicesApi } from '../services/pluginApi';
+import { createPluginDataApi } from '../data/pluginApi';
+import { createPluginAiApi } from '../ai/pluginApi';
+import { createLifecycleQueue } from './lifecycleQueue';
 import type {
   Disposable,
   PluginActivationContext,
@@ -40,6 +48,7 @@ const subscriptions = new Map<string, Disposable[]>();
 const settingListeners = new Map<string, Set<(key: string, value: SettingValue) => void>>();
 const storageListeners = new Map<string, Set<(key: string, value: unknown) => void>>();
 const loadTasks = new Map<string, Promise<void>>();
+const enqueueLifecycle = createLifecycleQueue();
 let initialized = false;
 
 for (const plugin of allTools) {
@@ -50,9 +59,10 @@ for (const plugin of allTools) {
 }
 
 const save = () => localStorage.setItem(persistenceKey, JSON.stringify({
-  enabled: Object.fromEntries(Object.entries(states).map(([id, state]) => [id, state.enabled])),
-  values,
-  storage,
+  // 保留尚未安装插件的备份数据，安装对应插件后即可重新读取。
+  enabled: { ...persisted.enabled, ...Object.fromEntries(Object.entries(states).map(([id, state]) => [id, state.enabled])) },
+  values: { ...persisted.values, ...values },
+  storage: { ...persisted.storage, ...storage },
 }));
 // Electron floating widgets run in a separate renderer. Keep settings and
 // plugin-private data synchronized through the shared localStorage origin.
@@ -100,6 +110,16 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
     path,
     reason,
     subscriptions: pluginSubscriptions,
+    services: createPluginServicesApi(plugin, () => states[plugin.id].enabled, () => window.serviceHost),
+    data: createPluginDataApi(plugin.id, () => storage[plugin.id], (next) => {
+      const previous = storage[plugin.id];
+      storage[plugin.id] = next;
+      try { save(); } catch (error) { storage[plugin.id] = previous; throw error; }
+      // 写入成功才广播，含已删除字段，确保页面与 Widget 都能清理旧内容。
+      const keys = new Set([...Object.keys(previous), ...Object.keys(next)]);
+      keys.forEach(key => pluginStorageListeners.forEach(listener => listener(key, next[key])));
+    }),
+    ai: createPluginAiApi(plugin, () => states[plugin.id].enabled, () => window.aiHost, pluginSubscriptions),
     host: {
       systemStats: () => plugin.capabilities?.systemStats && window.toolHost
         ? window.toolHost.systemStats()
@@ -193,14 +213,24 @@ const unload = async (plugin: ToolPlugin, reason: PluginDeactivationReason) => {
   } catch (error) { fail(plugin, error); }
 };
 
+/** 主窗口登记可订阅服务，Widget 不登记，避免覆盖主工作台的完整清单。 */
+const syncServices = async () => {
+  if (!window.serviceHost || window.location?.hash.startsWith('#/floating/')) return;
+  await window.serviceHost.register(allTools.flatMap(plugin => plugin.capabilities?.services ? (plugin.services ?? []).map(service => ({
+    topic: `${plugin.id}/${service.id}`, name: `${plugin.name} · ${service.name}`,
+    description: service.description ?? '', enabled: states[plugin.id].enabled,
+  })) : [])).catch(() => useToast().error('服务分发暂时不可用，请重启桌面应用；本地插件继续运行。'));
+};
+
 export const initializePlugins = async (pluginIds?: string[]) => {
   if (initialized) return;
   initialized = true;
+  await syncServices();
   const selected = pluginIds ? new Set(pluginIds) : undefined;
-  await Promise.all(allTools.filter((plugin) => states[plugin.id].enabled && (!selected || selected.has(plugin.id))).map((plugin) => load(plugin)));
+  await Promise.all(allTools.filter((plugin) => states[plugin.id].enabled && (!selected || selected.has(plugin.id))).map((plugin) => enqueueLifecycle(plugin.id, () => load(plugin))));
 };
 
-export const acquirePlugin = async (id: string, reason: PluginActivationReason, path = ''): Promise<() => Promise<void>> => {
+export const acquirePlugin = async (id: string, reason: PluginActivationReason, path = ''): Promise<() => Promise<void>> => enqueueLifecycle(id, async () => {
   const plugin = pluginFor(id); const state = states[id]; const token = Symbol(id);
   if (!plugin || !state?.enabled) return async () => undefined;
   await load(plugin, reason);
@@ -214,18 +244,20 @@ export const acquirePlugin = async (id: string, reason: PluginActivationReason, 
       state.status = 'active';
     } catch (error) { active.delete(token); state.activeScopes = 0; fail(plugin, error); }
   }
-  return async () => {
+  // 释放也必须排队：最后一个使用者离开时，激活回调可能仍在等待异步资源。
+  return () => enqueueLifecycle(id, async () => {
     if (!active.delete(token)) return;
     state.activeScopes = active.size;
     if (!active.size) await deactivate(plugin, reason === 'widget' ? 'widget' : 'route', path);
-  };
-};
+  });
+});
 
-export const setPluginEnabled = async (id: string, enabled: boolean) => {
+export const setPluginEnabled = async (id: string, enabled: boolean) => enqueueLifecycle(id, async () => {
   const plugin = pluginFor(id); if (!plugin || !states[id] || states[id].enabled === enabled) return;
   states[id].enabled = enabled; save();
+  await syncServices();
   if (enabled) await load(plugin, 'manual'); else await unload(plugin, 'disabled');
-};
+});
 
 export const updateSetting = (id: string, key: string, value: SettingValue) => {
   const plugin = pluginFor(id); const field = plugin?.settings?.fields?.find((item) => item.key === key);
@@ -240,7 +272,8 @@ export const updateSetting = (id: string, key: string, value: SettingValue) => {
   values[id][key] = value; save();
   try { settingListeners.get(id)?.forEach((listener) => listener(key, value)); } catch (error) { fail(plugin, error); }
   if (states[id].status !== 'disabled') {
-    void Promise.resolve(plugin.events?.settingsChanged?.(contextFor(plugin, '', 'manual'), key, value)).catch((error: unknown) => fail(plugin, error));
+    // 在 Promise 回调内部调用钩子，同时捕获同步抛错和异步拒绝。
+    void Promise.resolve().then(() => plugin.events?.settingsChanged?.(contextFor(plugin, '', 'manual'), key, value)).catch((error: unknown) => fail(plugin, error));
   }
 };
 
@@ -252,8 +285,8 @@ export const pluginRuntime = {
   componentApi(id: string): PluginComponentApi | undefined {
     const plugin = pluginFor(id);
     if (!plugin) return undefined;
-    const { host, settings, storage: pluginStorage, ui } = contextFor(plugin, '', 'manual');
-    return { host, settings, storage: pluginStorage, ui };
+    const { host, ai, data, services, settings, storage: pluginStorage, ui } = contextFor(plugin, '', 'manual');
+    return { host, ai, data, services, settings, storage: pluginStorage, ui };
   },
-  async shutdown() { await Promise.all(allTools.map((plugin) => unload(plugin, 'shutdown'))); },
+  async shutdown() { await Promise.all(allTools.map((plugin) => enqueueLifecycle(plugin.id, () => unload(plugin, 'shutdown')))); },
 };

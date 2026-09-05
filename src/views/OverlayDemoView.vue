@@ -1,3 +1,7 @@
+<!--
+  文件说明：展示 Toast 与 Sheet 的使用示例，便于检查插件提示消息和面板交互效果。
+-->
+
 <script setup lang="ts">
 import { Bell, CheckCircle2, PanelBottom, TriangleAlert } from 'lucide-vue-next';
 import { useSheet } from '../composables/useSheet';

@@ -1,3 +1,7 @@
+/**
+ * 文件说明：封装 iconfont 图标搜索与分页状态，通过宿主或代理接口获取并规范化图标结果。
+ */
+
 // iconfont.cn search via the same-origin proxy (/iconfont-api → iconfont.cn/api).
 // The search endpoint returns complete inline SVGs (show_svg) — no login needed.
 import { reactive } from 'vue'

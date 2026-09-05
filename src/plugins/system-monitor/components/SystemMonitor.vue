@@ -1,3 +1,7 @@
+<!--
+  文件说明：展示系统 CPU、GPU、内存、磁盘和网络等统计信息，并按插件配置周期刷新。
+-->
+
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Activity, Cpu, HardDrive, MemoryStick, Monitor, Wifi } from 'lucide-vue-next';

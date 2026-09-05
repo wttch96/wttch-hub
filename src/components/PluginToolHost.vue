@@ -1,3 +1,7 @@
+<!--
+  文件说明：加载插件工具页面并注入宿主 API，将插件设置和更新操作传递给实际工具组件。
+-->
+
 <script setup lang="ts">
 import { computed, defineAsyncComponent, provide } from 'vue';
 import { findTool } from '../config/tools';

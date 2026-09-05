@@ -1,3 +1,7 @@
+/**
+ * 文件说明：声明待办清单插件的页面入口、能力、生命周期及设置，将插件实现接入工作台运行时。
+ */
+
 import { ListTodo } from 'lucide-vue-next';
 import { defineToolPlugin, type PluginComponentApi } from '@wttch-hub/plugin-api';
 import { connectTodoStore, disconnectTodoStore } from './store';
@@ -6,6 +10,7 @@ export default defineToolPlugin({
   apiVersion: 1,
   id: 'todo',
   path: 'todo',
+  navigation: { label: '待办清单', order: 10 },
   name: 'Todo 清单',
   icon: ListTodo,
   desc: '使用可拖拽泳道管理任务、优先级、截止时间与完成状态。',

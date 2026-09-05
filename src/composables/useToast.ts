@@ -1,3 +1,7 @@
+/**
+ * 文件说明：维护共享 Toast 消息队列，提供不同类型提示的创建、定时移除和主动关闭操作。
+ */
+
 import { readonly, ref } from 'vue';
 
 export type ToastKind = 'info' | 'success' | 'error';

@@ -1,3 +1,7 @@
+<!--
+  文件说明：实现位协议图编辑器，解析协议文本、计算字段布局并展示和导出 SVG 图形。
+-->
+
 <script setup lang="ts">
 // Bit 协议绘制器：左侧编辑 packet 定义（DSL），右侧实时渲染类 Mermaid packet 的位图。
 // 语法以 packet.g4 为准：位置 `NUMBER[expr]`（[expr] 角标标签不求值）、渲染长度

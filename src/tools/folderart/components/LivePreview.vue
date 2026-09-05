@@ -1,3 +1,7 @@
+<!--
+  文件说明：显示当前图标配置对应的实时合成画布，让用户预览模板、图标与文字效果。
+-->
+
 <script setup lang="ts">
 import { ref } from 'vue'
 import { config } from '@/tools/folderart/composables/useConfig'

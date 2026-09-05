@@ -1,4 +1,8 @@
 /**
+ * 文件说明：读取并校验插件集合 ZIP，将其中的插件源码安装到项目插件目录以参与后续构建。
+ */
+
+/**
  * 安装或更新 wttch-hub 插件集合包。
  *
  * 扫描 plugins/wttch-hub@plugins-<version>.zip，校验根 package.json 后，

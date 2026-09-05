@@ -1,3 +1,7 @@
+/**
+ * 文件说明：处理 Canvas 图标像素的重着色、黑白和浮雕效果，供文件夹图标合成器应用不同印刷模式。
+ */
+
 // Color helpers used by the composer: icon print modes.
 import { hexToRgb } from '@/types'
 

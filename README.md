@@ -1,3 +1,7 @@
+<!--
+  文件说明：介绍工作台功能、开发启动方式、插件 API、数据管理和微信服务分发的使用与维护方法。
+-->
+
 # wttch-hub
 
 一个基于 Electron + Vue 3 的桌面「小工具集」外壳：在 **Windows** 上渲染出 macOS 风格的异形窗口（无边框圆角 + 红绿灯控制按钮 + 可拖拽顶栏），内嵌可折叠侧栏与多页面路由，并集成了从 [wttch-labs](https://github.com/wttch/wttch-labs) 移植来的四个小工具。
@@ -6,7 +10,7 @@
 
 - **macOS 风格窗口（仅 Windows）**：`main` 用 `frame:false + transparent` 建无边框窗口，页面根节点以 CSS `border-radius` 画圆角形成异形形状；渲染层用自绘的「红绿灯」（关闭 / 最小化 / 缩放）通过 IPC 控制真实窗口；顶栏整条可拖拽移动窗口（`-webkit-app-region: drag`），双击顶栏走系统默认的最大化 / 还原。
   - macOS / Linux 保持各自平台的原生窗口框。
-- **可折叠侧栏**：主页 / 小工具 / 设置 三个导航项，可折叠成只剩图标的窄栏。
+- **可折叠侧栏**：主页 / 小工具 / 插件 / 设置，以及可配置的插件快捷菜单；可折叠成只剩图标的窄栏。
 - **页面切换**：带淡入淡出的 mac 风格转场。
 - **底部状态栏**：显示当前页面，右侧有调试按钮可开关 Chrome DevTools（以独立窗口打开；dev 模式启动时自动打开）。
 - **四个移植工具**（作为「工具库卡片页 + 嵌套子路由」接入 `/tools`）：
@@ -18,6 +22,12 @@
 | `/tools/packetdraw` | 协议绘制器 | 用文本描述渲染网络协议时序图（SVG / PNG） |
 | `/tools/radixconv` | 进制转换器 | 2 / 8 / 10 / 16 进制大数互转与位运算 |
 | `/tools/bitparser` | 16 进制数值解析 | 将完整 HEX 解析为整数、补码或标准 IEEE 754 float / double |
+
+## 应用图标与系统托盘
+
+应用启动后，Windows 通知区域和 macOS 菜单栏会出现 Hub 图标。点击图标弹出菜单，菜单提供“显示工作台 / 隐藏工作台 / 退出”，右键同样可打开菜单。隐藏窗口不会销毁渲染器，闹钟等已加载插件继续运行；关闭主窗口时默认退出应用，也可在设置中选择“隐藏到托盘”；托盘退出与 Cmd+Q 始终退出。macOS 即使只剩浮动 Widget，也可点击 Dock 或选择托盘菜单中的“显示工作台”重开主工作台。
+
+Windows 使用多尺寸 ICO，macOS 菜单栏使用能随系统明暗自动着色的 Template 及 Retina 版本。应用窗口、Dock/Finder 和安装包同时接入 Hub 应用图标。设计源图、素材说明和生成提示词见 [assets/icons/README.md](assets/icons/README.md)，素材更新后在 macOS 执行 `npm run build:icons`。
 
 ## 技术栈
 
@@ -32,6 +42,82 @@
 
 系统监控、主题配置、Todo 清单和闹钟提醒源码位于 `src/plugins/`，分别示范 Widget/系统能力、主题 token、私有数据存储和桌面通知。插件包定义写在各自的 `package.ts` 中；运行 `npm run install:plugin-api` 会先卸载旧版本，再将最新的 `@wttch-hub/plugin-api` 安装到 `node_modules`，插件通过包名直接导入宿主 API 类型和定义函数。插件集合 ZIP 由独立的外部打包流程生成，`npm run install:plugins` 可将集合包整体安装或更新到 `src/plugins/`。插件页面还可以用系统文件选择器把 ZIP 加载到 Electron `userData/plugins` 仓库，主进程会限制包体积、验证 API 版本、ID、入口路径和重复 ID；托管仓库中的包可以删除。
 
+### 统一 AI 服务与右侧聊天
+
+在 **设置 → AI 服务** 中选择 DeepSeek 或自定义兼容服务，填写服务地址、模型、API Key（DeepSeek 可直接选择 Flash / Pro，自定义兼容服务填写模型 ID），保存后点击“测试连接”。测试会发送一条短补全请求，因此能检查模型调用与鉴权是否可用，并可能产生少量 token 费用。侧栏底部的 **AI 聊天** 打开右侧抽屉，支持编辑系统提示词、多轮聊天、停止、失败重试和新对话；Enter 发送，Shift+Enter 换行。
+
+插件通过 `capabilities.ai` 声明能力，并可提供自己的默认生成参数：
+
+```ts
+export default defineToolPlugin({
+  // 其余必需字段（id、name、component 等）同普通插件。
+  capabilities: { ai: true },
+  ai: {
+    systemPrompt: '你是中文技术文档助手，请给出简洁且准确的说明。',
+    temperature: 0.3,
+    maxTokens: 2048,
+  },
+  // ...
+});
+```
+
+组件通过注入的 `PluginComponentApi` 使用 `api.ai`；生命周期回调通过 `context.ai` 使用同一接口：
+
+```ts
+const status = await api.ai.getStatus();
+if (status.ok === true && status.value.enabled && status.value.configured) {
+  const requestId = crypto.randomUUID();
+  const result = await api.ai.chat({
+    requestId,
+    messages: [{ role: 'user', content: '解释这个函数的作用。' }],
+    // 单次调用可覆盖插件默认系统提示词、模型、temperature、maxTokens。
+    systemPrompt: '请用中文分三点回答。',
+  });
+  if (result.ok === true) {
+    console.log(result.value.content, result.value.usage);
+  } else {
+    console.log(result.error.code, result.error.message, result.error.retryable);
+  }
+  // 对仍在执行的请求：await api.ai.cancel(requestId);
+}
+
+const subscription = api.ai.onDidChange((status) => {
+  // configured 表示配置完整；connection 才表示最近一次调用是否通过。
+  console.log(status.configured, status.connection, status.lastError);
+});
+// 页面不再使用订阅时：subscription.dispose(); 宿主卸载插件时也会统一清理。
+// 显式诊断：const result = await api.ai.test(); 会发送一条短测试消息。
+```
+
+- `getStatus()` 区分 `configured`（密钥可读取且配置完整）、`enabled`（全局开关）和 `connection`（`untested` / `ok` / `error`），同时提供检查时间及最近错误。保存新配置后重置验证状态并取消旧请求。
+- `chat()` 返回完整文本、实际模型、结束原因与可选 token 用量。当前为非流式文本补全，支持 `systemPrompt`、`model`、`temperature`、`maxTokens`、`responseFormat` 和 DeepSeek 的 `thinking` 开关，不执行模型生成的工具或代码。
+- `responseFormat: 'json_object'` 需要兼容服务支持，并在提示词中要求 JSON；`finishReason: 'length'` 表示输出可能被截断。内置聊天最多携带最近 20 轮成功对话，聊天记录仅保留在当前会话内存中。
+- 错误码包含 `NOT_CONFIGURED`、`DISABLED`、`FORBIDDEN`、`AUTH`、`RATE_LIMIT`、`TIMEOUT`、`CANCELLED`、`NETWORK`、`PROVIDER`、`INVALID_REQUEST`、`INVALID_RESPONSE`、`STORAGE`、`UNAVAILABLE`、`BUSY`，调用方可直接判断 `ok` 与 `error.code`。
+- 密钥只在主进程中解密，以 Electron `safeStorage` 加密后写入 `userData/ai-config.json`；不会通过状态接口返回，也不会写入插件存储或 localStorage。系统安全存储不可用时拒绝保存密钥，不退回明文存储。更换服务地址必须重新输入密钥。
+- AI IPC 校验应用文档与主 frame，取消请求按窗口和调用方隔离。插件仍遵循宿主现有的可信、同渲染器运行方式；能力声明不是对恶意插件的独立安全沙箱。只有应用设置入口应调用 `configure`，插件使用 `api.ai`。
+- 自定义地址使用 Chat Completions 根路径（如 `https://example.com/v1`），自动追加 `/chat/completions`。远程服务使用 HTTPS，HTTP 仅允许本机兼容服务；不跟随重定向发送密钥。
+
+接口依据：[DeepSeek Chat Completions 文档](https://api-docs.deepseek.com/api/create-chat-completion/)、[Electron safeStorage 文档](https://www.electronjs.org/docs/latest/api/safe-storage)。API 类型更新后运行 `npm run install:plugin-api` 更新插件开发包。
+
+### 插件导航菜单
+
+在插件入口的 `defineToolPlugin({...})` 中声明 `navigation`，即可提供侧栏快捷入口：
+
+```ts
+navigation: {
+  label: '待办清单',     // 默认菜单名称；省略时使用插件 name
+  defaultVisible: true, // 默认显示；false 表示允许用户在设置中手动打开
+  order: 10,            // 默认排序权重，数值越小越靠前
+},
+```
+
+- `navigation: true` 使用默认名称并默认显示；`false` 或不填写表示不支持导航入口，不会出现在菜单设置中。
+- 用户可在 **设置 → 导航菜单** 中勾选显示、重命名、上移/下移或恢复全部默认配置。名称最多 40 个字符，留空恢复插件默认名称；修改后自动保存，重启后保留。
+- 菜单重命名只影响侧栏，不改变插件名称、工具库标题、路由或插件 ID。插件菜单位于“小工具”和“插件”之间，固定的应用入口不参与排序。
+- 禁用插件会隐藏它的导航入口，重新启用后恢复之前的菜单偏好；隐藏菜单不会禁用插件，工具库仍可打开。
+- Todo 和闹钟默认显示，系统监控支持导航但默认隐藏，主题插件不提供导航入口。
+- 导航偏好使用独立的 `wttch-hub:navigation:v1` 存储键，并通过 `storage` 事件同步到其他窗口。菜单配置字段是可选扩展，API 版本保持为 1；更新类型后运行 `npm run install:plugin-api` 刷新本地开发包。
+
 ### 生命周期与宿主 API
 
 生命周期顺序与 VS Code 的扩展模型相近：`load → activate → deactivate → unload`。启用插件触发 `load`；首次打开工具页或挂载 Widget 时触发 `activate`；页面和 Widget 都释放后触发 `deactivate`；禁用、卸载或应用退出时触发 `unload`。回调可以是异步函数，`load`/`activate` 可以返回清理函数或 `{ dispose() }`。插件放进 `context.subscriptions` 的资源会在卸载时按逆序自动释放。
@@ -42,6 +128,8 @@
 - `ui`：Toast 和 Sheet UI，不需要插件直接操作宿主组件。
 - `settings`：读取、更新设置并订阅变化；声明式字段支持 boolean、number、text 和 select。
 - `storage`：按插件 ID 隔离并持久化的键值存储，支持变更订阅。
+- `data`：基于同一存储提供键列表、JSON 字节用量、快照导出/恢复和清空；仅操作本插件的数据。
+- `services`：发布插件声明的服务结果，由用户配置的微信订阅决定是否分发以及接收会话。
 - `PLUGIN_COMPONENT_API_KEY`：工具页和 Widget 通过 Vue `inject` 获取同一套受控宿主能力。
 - `floatingWidget`：声明独立的透明浮动组件；`host.openFloatingWidget()`、`updateFloatingWidget()` 和 `closeFloatingWidget()` 控制窗口尺寸、置顶及位置锁定。
 - `subscriptions`：VS Code 风格的 Disposable 集合。
@@ -53,6 +141,80 @@
 闹钟插件同时提供主页时间 Widget 和浮动时钟。浮动窗口使用独立透明渲染器，可始终置顶并跨桌面显示；锁定后禁止窗口移动和缩放。浮动渲染器只激活主题与目标插件，避免重复运行插件级后台任务。
 
 > Vue SFC/TypeScript 插件必须参与 Vite 编译。应用内“加载 ZIP”负责可信包仓库和清单管理；如果包中的插件 ID 尚未编译进当前应用，管理页会显示“待编译”。开发时将包放入项目 `plugins/`，运行 `npm run install:plugins` 后重新构建。宿主不会把任意 ZIP 源码当作 JavaScript 直接执行。
+
+## 窗口行为与数据管理
+
+设置中的“窗口与后台运行”提供“退出应用 / 隐藏到托盘”，配置写入 `userData/desktop-config.json`，保存后立即生效。托盘不可用时回退到退出，避免窗口隐藏后无法找回。单实例锁按 Electron 的用户数据目录区分实例；再次启动会还原、显示并聚焦已有主窗口，不重复创建托盘或插件调度器。生命周期接口依据 [Electron app 文档](https://www.electronjs.org/docs/latest/api/app)。
+
+“数据管理”显示运行时真实的 `app.getPath('userData')`，支持打开目录、导出 JSON 备份和恢复备份：
+
+- 白名单包含插件存储与设置、导航、主页 Widget 布局、folderart 偏好、packetdraw 文本和关闭行为。
+- 不导出 AI 和微信配置/密钥、Cookie、缓存或插件 ZIP；业务数据中的插件自存内容按原样备份，因此插件不要把秘密写入 `storage`。
+- 恢复先校验格式、版本、数据结构和 10 MB 大小限制，再显示覆盖确认。确认后重新读取当前数据，自动写入 `userData/backups/before-restore-*.json`。
+- 恢复通过 `pending-restore.json` 暂存；关闭旧 Widget，重载主窗口，在插件模块导入前应用快照。写入失败会回滚 localStorage，待恢复文件保留供重试。成功后更新关闭行为并删除暂存文件。
+- 未安装插件的数据会保留，安装相应插件后可以读取。恢复后需手动重新打开浮动 Widget。AI 聊天目前仍是内存会话，不在备份内。
+
+### 插件数据 API
+
+`context.data` 与组件注入的 `api.data` 都使用 `PluginDataApi`，与现有 `storage` 共用 `wttch-hub:plugin-runtime:v1` 中按插件 ID 划分的命名空间；不改变已有同步存储接口，也不需要搬迁数据。
+
+```ts
+// 日常读写继续使用 storage。
+context.storage.update('result', { text: '任务完成' });
+const keys = context.data.keys();
+const usage = context.data.getUsage(); // { keys: 键数量, bytes: JSON UTF-8 字节数 }
+const snapshot = context.data.export(); // 深拷贝，可 JSON.stringify 后用于传输或留存
+
+// 仅接受本插件、version=1 的快照；整体替换 storage，单插件导入上限 4 MB。
+// 恢复和清空会通知 storage.onDidChange，失败会抛错，原数据保留。
+context.data.import(snapshot);
+// 只有用户在插件界面明确选择清空时才调用：
+// context.data.clear();
+```
+
+快照格式为 `{ format: 'wttch-hub-plugin-data', version: 1, pluginId, data }`。设置字段、其他插件数据和宿主凭据不在插件快照内。插件数据 API 不暴露任意文件路径读写；整体文件备份由宿主设置页处理。插件处于现有可信渲染器模型，命名空间是 API 边界，不是恶意代码隔离沙箱。更新开发类型包可运行 `npm run install:plugin-api`。
+
+## 微信官方 ClawBot 与服务分发
+
+设置中的“微信 ClawBot · 服务订阅”直接使用腾讯官方公开的 iLink 微信通道协议，不要求安装 OpenClaw。本实现对照官方插件 2.4.8：参考 [腾讯官方仓库](https://github.com/Tencent/openclaw-weixin)、[扫码登录流程](https://github.com/Tencent/openclaw-weixin/blob/main/src/auth/login-qr.ts) 和 [收发接口](https://github.com/Tencent/openclaw-weixin/blob/main/src/api/api.ts)。
+
+使用流程：
+
+1. 点击“扫码连接微信”，使用手机微信扫描并确认；若提示配对码，填写手机显示的数字。
+2. 在微信中给 ClawBot 发送一条消息。宿主收取官方返回的会话 ID 与 context token，才能确定可投递的会话。
+3. 选择服务（例如“闹钟提醒 · 闹钟触发”）和接收会话，添加并保存订阅。保存意味着允许该服务后续发布的标题和正文发送到指定会话。
+4. 查看最近发送记录，或暂停分发、移除订阅。会话上下文过期时需再次向 ClawBot 发消息；登录失效时重新扫码。
+
+插件声明服务并发布结果：
+
+```ts
+export default defineToolPlugin({
+  // 省略常规 id/name/component 等字段。
+  capabilities: { ai: true, services: true },
+  services: [{ id: 'daily-report', name: '日报结果', description: '生成日报后发布最终文本' }],
+});
+
+// 在插件任务中使用 lifecycle context 或组件 api；只发布明确选定的最终结果。
+const status = await context.services.getStatus('daily-report');
+const result = await context.ai.chat({ messages: [{ role: 'user', content: '根据任务数据生成日报' }] });
+if (result.ok) {
+  const delivery = await context.services.publish('daily-report', {
+    id: 'daily-report-2026-09-05', // 同一业务事件使用稳定 ID
+    title: '今日日报',
+    text: result.value.content, // 本版正文上限 3500 字符；标题上限 120 字符
+  });
+  // delivery: { accepted, sent, failed, skipped, error? }
+  // sent 只表示微信接口接受请求，不代表用户已阅读。
+}
+```
+
+宿主按 `pluginId/serviceId` 隔离主题。插件无法通过此 API 选择任意微信收件人或读取 token；服务须声明 `capabilities.services`，禁用插件后不可继续发布。Widget 不发布也不登记服务，避免重复通知。外部服务可以由插件获取结果后以同一 API 发布，本版不提供公网回调服务器。
+
+凭据、会话上下文和订阅统一经 Electron `safeStorage` 加密写入 `userData/wechat-config.json`，不进入通用备份。入站消息正文不保存、不执行，也不自动传给 AI。换账号前需退出登录；退出时清除旧会话和订阅，避免新账号误继承接收人。
+
+当前分发为文本、单账号、在线发送。队列最多 50 个事件，当前进程最近 500 个事件 ID 去重；最近 50 条发送记录仅存内存，不保存正文。没有订阅就不发送，暂停或退出应用不投递，失败/超时不自动重试，重启不补发历史事件。已经发出的网络请求可能在撤销订阅前被微信接受，撤销仅阻止尚未发出的后续投递。插件仍运行在可信渲染器模型中，此 API 隔离不是恶意插件安全沙箱。
+
+测试使用模拟微信响应验证协议、配对登录、取消竞态、订阅撤销、去重、IPC 来源与凭据存储；真实扫码和接收会话需要用户自行授权后联调。
 
 ## 快速开始
 

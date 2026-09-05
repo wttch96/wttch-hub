@@ -1,3 +1,7 @@
+/**
+ * 文件说明：根据模板清单和配置在 Canvas 上合成底板、图标与文字，提供实时预览和导出所需画布。
+ */
+
 // Canvas composition: draw the template + icon (with print-mode effects) +
 // optional centered text, at 1024×1024. Re-renders (rAF-debounced) whenever
 // the config changes. Exposes the canvas element and helpers for download.

@@ -1,3 +1,7 @@
+<!--
+  文件说明：加载独立浮动窗口中的插件组件，为浮动 Widget 注入宿主 API 和插件设置。
+-->
+
 <script setup lang="ts">
 import { computed, defineAsyncComponent, provide } from 'vue';
 import { findTool } from '../config/tools';

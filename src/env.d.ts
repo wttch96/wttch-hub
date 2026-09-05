@@ -1,3 +1,7 @@
+/**
+ * 文件说明：声明 Vue 单文件组件和 Window 上的预加载桥接类型，供渲染进程进行 TypeScript 类型检查。
+ */
+
 /// <reference types="vite/client" />
 
 // Keep this file a plain script (no top-level import/export) so the ambient
@@ -30,6 +34,11 @@ interface IconfontSearchResponse {
 }
 
 interface Window {
+  serviceHost?: import('./services/contracts').ServiceBridge;
+  wechatHost?: import('./services/contracts').WechatBridge;
+  desktopHost?: import('./data/contracts').DesktopBridge;
+  /** 统一 AI 服务桥，浏览器预览时不存在。 */
+  aiHost?: import('./ai/contracts').AiBridge;
   /** Present when the page runs inside Electron (see src/preload.ts). */
   windowControls?: WindowControlsApi;
   toolHost?: {

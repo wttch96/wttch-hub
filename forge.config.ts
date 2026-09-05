@@ -1,3 +1,8 @@
+/**
+ * 文件说明：配置 Electron Forge 的应用打包、平台安装包、图标资源与构建插件，定义桌面发行产物。
+ */
+
+import path from 'node:path';
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
@@ -10,10 +15,14 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    // 无扩展名时 Packager 根据目标平台选用 hub.icns / hub.ico。
+    icon: path.join(__dirname, 'assets', 'icons', 'hub'),
+    // 托盘资源保留原始 Template/@2x 名称，并置于 asar 外，供系统原生 API 读取。
+    extraResource: [path.join(__dirname, 'assets', 'icons')],
   },
   rebuildConfig: {},
   makers: [
-    new MakerSquirrel({}),
+    new MakerSquirrel({ setupIcon: path.join(__dirname, 'assets', 'icons', 'hub.ico') }),
     new MakerZIP({}, ['darwin']),
     new MakerRpm({}),
     new MakerDeb({}),

@@ -1,3 +1,7 @@
+/**
+ * 文件说明：插件公共 API 的类型与定义函数唯一源文件，约定插件清单、生命周期、存储、AI 和服务分发接口。
+ */
+
 import type { Component } from 'vue';
 
 /**
@@ -69,6 +73,41 @@ export interface PluginStorageApi {
   onDidChange(listener: (key: string, value: unknown) => void): Disposable;
 }
 
+/** 可移植的插件数据快照；只含当前插件 storage，不含设置或宿主 AI 密钥。 */
+export type PluginDataSnapshot = {
+  format: 'wttch-hub-plugin-data';
+  version: 1;
+  pluginId: string;
+  data: Record<string, unknown>;
+};
+/**
+ * 插件数据管理：与现有 storage 共用持久化空间，无需迁移已有数据。
+ * import 以快照整体替换当前插件数据，校验版本和插件 ID；clear 仅清空自身数据。
+ * 这两个操作均触发 storage.onDidChange，持久化失败时保留原数据并抛出错误。
+ * 导出是普通 JSON 快照，文件选择与整体备份由宿主设置页负责。
+ * 不应在此保存 API Key 等秘密；第三方插件仍运行在宿主可信渲染器中，并非安全沙箱。
+ */
+export interface PluginDataApi {
+  keys(): string[];
+  getUsage(): { keys: number; bytes: number };
+  export(): PluginDataSnapshot;
+  import(snapshot: PluginDataSnapshot): void;
+  clear(): void;
+}
+
+/** 插件发布的服务结果；id 是业务事件的稳定 ID，用于当前进程内去重。 */
+export type ServiceOutput = { id: string; title: string; text: string };
+export type ServicePublishResult = { accepted: boolean; sent: number; failed: number; skipped: number; error?: string };
+/**
+ * 插件只发布自己声明的服务结果，不选择微信收件人，也不读取微信凭据。
+ * 用户在宿主设置中创建服务订阅后才向相应会话分发；没有订阅时跳过发送。
+ * AI 输出不会自动外发，插件应明确选择要发布的最终结果。
+ */
+export interface PluginServicesApi {
+  publish(serviceId: string, output: ServiceOutput): Promise<ServicePublishResult>;
+  getStatus(serviceId: string): Promise<{ configured: boolean; subscribed: number }>;
+}
+
 export interface PluginUiApi {
   showToast(message: string, kind?: 'info' | 'success' | 'error', duration?: number): number;
   dismissToast(id: number): void;
@@ -76,11 +115,74 @@ export interface PluginUiApi {
   closeSheet(): void;
 }
 
+/** AI 的可诊断错误码；插件应按 code 分支处理，不依赖服务商的英文错误文本。 */
+export type AiErrorCode = 'NOT_CONFIGURED' | 'DISABLED' | 'FORBIDDEN' | 'INVALID_REQUEST'
+  | 'AUTH' | 'RATE_LIMIT' | 'TIMEOUT' | 'CANCELLED' | 'NETWORK' | 'PROVIDER'
+  | 'INVALID_RESPONSE' | 'STORAGE' | 'UNAVAILABLE' | 'BUSY';
+export type AiError = { code: AiErrorCode; message: string; retryable: boolean; status?: number };
+/** 使用普通可序列化对象跨 IPC 返回错误，避免 Electron 丢失自定义 Error 的属性。 */
+export type AiResult<T> = { ok: true; value: T } | { ok: false; error: AiError };
+export type AiMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+export type AiGenerationOptions = {
+  /** 单次调用覆盖插件默认提示词；不自动读取页面、文件或其他插件的内容。 */
+  systemPrompt?: string;
+  /** 省略时使用宿主统一配置的模型；插件可为特殊任务指定兼容的模型。 */
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  /** JSON 输出仍需要在提示词中明确要求 JSON，且服务商必须支持该参数。 */
+  responseFormat?: 'text' | 'json_object';
+  /** DeepSeek 的思考开关；兼容服务不发送这一扩展参数。默认关闭。 */
+  thinking?: boolean;
+};
+export type AiChatRequest = AiGenerationOptions & {
+  messages: AiMessage[];
+  /** 可选的请求 ID，用于 cancel；同一个调用方的并行请求必须使用不同 ID。 */
+  requestId?: string;
+};
+export type AiCompletion = {
+  requestId: string;
+  content: string;
+  model: string;
+  finishReason: string;
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+};
+export type AiStatus = {
+  enabled: boolean;
+  /** 配置字段完整且密钥可读取，只表示具备调用条件，不代表服务商已验证通过。 */
+  configured: boolean;
+  hasApiKey: boolean;
+  provider: 'deepseek' | 'compatible';
+  baseUrl: string;
+  model: string;
+  timeoutMs: number;
+  /** 修改配置后自动回到 untested，旧请求结果不会覆盖新配置的连接状态。 */
+  connection: 'untested' | 'ok' | 'error';
+  checkedAt?: string;
+  lastError?: AiError;
+};
+
+/**
+ * 插件 AI 能力：统一配置由宿主管理，接口不会返回 API Key。
+ * 使用前在 capabilities 声明 ai: true；未声明或已禁用的插件调用会返回 FORBIDDEN。
+ * test 会向已配置服务发送极短的测试消息，可能产生少量 token 费用。
+ */
+export interface PluginAiApi {
+  getStatus(): Promise<AiResult<AiStatus>>;
+  test(requestId?: string): Promise<AiResult<AiCompletion>>;
+  chat(request: AiChatRequest): Promise<AiResult<AiCompletion>>;
+  cancel(requestId: string): Promise<boolean>;
+  onDidChange(listener: (status: AiStatus) => void): Disposable;
+}
+
 /** 注入工具页和 Widget 的受控插件能力。 */
 export interface PluginComponentApi {
   host: ToolHostApi;
+  ai: PluginAiApi;
   settings: PluginSettingsApi;
   storage: PluginStorageApi;
+  data: PluginDataApi;
+  services: PluginServicesApi;
   ui: PluginUiApi;
 }
 
@@ -90,12 +192,15 @@ export const PLUGIN_COMPONENT_API_KEY = 'wttch-hub:plugin-api';
 /** 插件激活回调收到的上下文，后续可继续扩展宿主能力。 */
 export interface PluginActivationContext {
   host: ToolHostApi;
+  ai: PluginAiApi;
   path: string;
   reason: PluginActivationReason;
   /** push 进来的资源会在插件卸载时按逆序自动 dispose。 */
   subscriptions: Disposable[];
   settings: PluginSettingsApi;
   storage: PluginStorageApi;
+  data: PluginDataApi;
+  services: PluginServicesApi;
   ui: PluginUiApi;
 }
 
@@ -148,6 +253,19 @@ export interface PluginInstallResult {
   cancelled?: boolean;
 }
 
+/**
+ * 插件提供给侧栏的默认菜单配置，用户可在设置页覆盖名称、可见性和顺序。
+ * 这里只声明展示偏好，菜单始终复用插件原有路由和图标，不创建第二套页面。
+ */
+export interface PluginNavigationOptions {
+  /** 默认菜单名称；省略时使用插件 name，用户重命名不会修改插件本身的名称。 */
+  label?: string;
+  /** 是否默认显示；false 仍允许用户在设置中开启，省略时为 true。 */
+  defaultVisible?: boolean;
+  /** 默认排序权重，较小者在前；未填写时按插件注册顺序排在指定权重的项目之后。 */
+  order?: number;
+}
+
 export interface ToolPlugin {
   /** 插件实现的 API 版本。 */
   apiVersion: typeof PLUGIN_API_VERSION;
@@ -159,6 +277,16 @@ export interface ToolPlugin {
   tags: string[];
   tint: [string, string];
   flow?: boolean;
+  /**
+   * 是否允许在主导航显示：true 使用默认菜单配置，对象可指定默认名称和顺序。
+   * false 或省略表示不提供导航入口，设置页也不展示该插件的菜单编辑项。
+   * 此字段只影响导航入口，不影响工具库、路由、Widget 和插件启用状态。
+   */
+  navigation?: boolean | PluginNavigationOptions;
+  /** 插件级 AI 默认参数；只对该插件生效，单次 chat 参数优先，不修改宿主统一配置。 */
+  ai?: AiGenerationOptions;
+  /** 服务 ID 在插件内唯一；宿主以 pluginId/serviceId 作为订阅主题。 */
+  services?: Array<{ id: string; name: string; description?: string }>;
   component: ComponentLoader;
   events?: {
     /** 首次启用时调用一次，适合注册命令、监听器和全局资源。 */
@@ -173,6 +301,8 @@ export interface ToolPlugin {
     settingsChanged?: (context: PluginLifecycleContext, key: string, value: boolean | number | string) => MaybePromise<void>;
   };
   capabilities?: {
+    services?: boolean;
+    ai?: boolean;
     systemStats?: boolean;
     notifications?: boolean;
     floatingWidget?: boolean;

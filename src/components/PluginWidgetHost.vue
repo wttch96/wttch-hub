@@ -1,3 +1,7 @@
+<!--
+  文件说明：加载首页插件 Widget，注入宿主 API，并按挂载状态管理插件作用域及刷新周期。
+-->
+
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, provide } from 'vue';
 import { findTool } from '../config/tools';

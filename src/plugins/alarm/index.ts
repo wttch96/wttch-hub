@@ -1,3 +1,7 @@
+/**
+ * 文件说明：声明闹钟提醒插件的页面入口、能力、生命周期及设置，将插件实现接入工作台运行时。
+ */
+
 import { AlarmClock } from 'lucide-vue-next';
 import { defineToolPlugin, type PluginComponentApi } from '@wttch-hub/plugin-api';
 import { startAlarmScheduler } from './store';
@@ -6,13 +10,15 @@ export default defineToolPlugin({
   apiVersion: 1,
   id: 'alarm',
   path: 'alarm',
+  navigation: { order: 20 },
   name: '闹钟提醒',
   icon: AlarmClock,
   desc: '创建一次、每天或工作日重复的时间提醒。',
   tags: ['闹钟', '提醒', '时间'],
   tint: ['#ff9f0a', 'rgba(255, 159, 10, 0.13)'],
   component: () => import('./components/AlarmPage.vue'),
-  capabilities: { notifications: true, floatingWidget: true, toast: true },
+  services: [{ id: 'triggered', name: '闹钟触发', description: '闹钟到期时发布提醒标题和时间，可订阅分发到微信。' }],
+  capabilities: { services: true, notifications: true, floatingWidget: true, toast: true },
   events: {
     load(context) { return startAlarmScheduler(context as PluginComponentApi, context.reason !== 'floating-widget'); },
     activate() { return { dispose() { /* 调度器属于 load 生命周期。 */ } }; },

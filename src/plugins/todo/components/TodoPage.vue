@@ -1,3 +1,7 @@
+<!--
+  文件说明：提供待办事项与分组管理页面，支持任务编辑和状态更新并同步到插件存储。
+-->
+
 <script setup lang="ts">
 import { computed, inject, nextTick, reactive, ref } from 'vue';
 import { CalendarClock, Check, Circle, GripVertical, LayoutDashboard, Pencil, Plus, Trash2, X } from 'lucide-vue-next';

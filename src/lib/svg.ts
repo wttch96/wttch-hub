@@ -1,3 +1,7 @@
+/**
+ * 文件说明：解析和规范化 SVG 的尺寸，并将 SVG 或图片加载为可供 Canvas 合成使用的图像对象。
+ */
+
 // SVG helpers: normalize an iconfont SVG (no natural size) so it can be drawn
 // onto a canvas at a known size without depending on naturalWidth.
 

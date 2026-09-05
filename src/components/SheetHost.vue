@@ -1,3 +1,7 @@
+<!--
+  文件说明：渲染全局 Sheet 面板容器，承载调用方指定的 Vue 组件、标题和参数。
+-->
+
 <script setup lang="ts">
 import { X } from 'lucide-vue-next';
 import { useSheet } from '../composables/useSheet';

@@ -1,3 +1,7 @@
+/**
+ * 文件说明：定义主题预设与颜色配置处理逻辑，将插件主题设置应用到工作台的样式变量。
+ */
+
 import type { PluginSettingsApi } from '@wttch-hub/plugin-api';
 
 export type ThemePalette = {

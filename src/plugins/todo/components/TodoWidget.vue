@@ -1,3 +1,7 @@
+<!--
+  文件说明：在首页 Widget 中展示待办摘要和快捷操作，复用待办插件状态与显示设置。
+-->
+
 <script setup lang="ts">
 import { computed, inject, ref } from 'vue';
 import { Check, Circle, ListTodo, Plus } from 'lucide-vue-next';

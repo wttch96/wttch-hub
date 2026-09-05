@@ -1,3 +1,7 @@
+<!--
+  文件说明：实现十六进制数值解析工具，展示不同数值类型与字节解释方式下的解析结果。
+-->
+
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 

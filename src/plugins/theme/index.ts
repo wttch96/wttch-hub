@@ -1,3 +1,7 @@
+/**
+ * 文件说明：声明主题配置插件的页面入口、能力、生命周期及设置，将插件实现接入工作台运行时。
+ */
+
 import { Palette } from 'lucide-vue-next';
 import { defineToolPlugin, type PluginSettingsApi } from '@wttch-hub/plugin-api';
 import { applyTheme, paletteFromSettings, resetTheme, themePresets } from './theme';
@@ -33,6 +37,7 @@ export default defineToolPlugin({
   apiVersion: 1,
   id: 'theme',
   path: 'theme',
+  navigation: false,
   name: '主题配置',
   icon: Palette,
   desc: '统一配置应用主题色、背景层级、文字、边框与语义状态颜色。',

@@ -1,3 +1,7 @@
+/**
+ * 文件说明：定义图标生成器共用的模板、图标、搜索结果与合成配置类型，并提供相关基础转换工具。
+ */
+
 // Shared type definitions for the folder-art composer.
 
 /** How the icon is printed onto the template face. */

@@ -1,3 +1,7 @@
+<!--
+  文件说明：以首页 Widget 展示闹钟与时间信息，复用插件存储和用户显示偏好。
+-->
+
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, ref } from 'vue';
 import { AlarmClock, Maximize2, Power } from 'lucide-vue-next';

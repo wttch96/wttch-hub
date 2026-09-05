@@ -1,3 +1,7 @@
+<!--
+  文件说明：提供图标文件的导出操作，展示下载状态并调用 PNG 或 ICNS 下载逻辑。
+-->
+
 <script setup lang="ts">
 import { config } from '@/tools/folderart/composables/useConfig'
 import { useDownload } from '@/tools/folderart/composables/useDownload'

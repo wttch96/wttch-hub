@@ -1,3 +1,7 @@
+<!--
+  文件说明：展示图标合成的文字、尺寸和印刷效果等参数，更新图标生成器共享配置。
+-->
+
 <script setup lang="ts">
 import { ref } from 'vue'
 import {

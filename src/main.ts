@@ -1,6 +1,16 @@
+/**
+ * 文件说明：Electron 主进程入口，负责单实例、窗口与托盘生命周期，并注册插件、AI、数据管理和微信分发的主进程接口。
+ */
+
 import { app, BrowserWindow, dialog, ipcMain, net, Notification, screen } from 'electron';
 import 'dotenv/config';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { registerAiIpc } from './ai/main';
+import { registerWechatIpc } from './services/main';
+import { registerDataIpc } from './data/main';
+import { createPreferences, shouldHideOnClose } from './desktop/preferences';
+import { createSystemTray, getApplicationIconPath } from './desktop/tray';
 import fs from 'node:fs';
 import started from 'electron-squirrel-startup';
 import si from 'systeminformation';
@@ -70,6 +80,13 @@ if (started) {
   app.quit();
 }
 
+// 安装器事件不获取锁；第二次启动立即退出，已有进程负责恢复窗口。
+const primaryInstance = !started && app.requestSingleInstanceLock();
+if (!primaryInstance) app.quit();
+let quitting = false;
+app.on('before-quit', () => { quitting = true; });
+let preferences: ReturnType<typeof createPreferences>;
+
 // Keep hardware acceleration on for normal desktop use. It is needed for
 // smooth macOS vibrancy and translucent-window resizing; disable it only for
 // restricted or virtualised environments via .env.
@@ -80,11 +97,11 @@ if (disableHardwareAcceleration) {
   app.commandLine.appendSwitch('disable-gpu');
   app.commandLine.appendSwitch('in-process-gpu');
 }
-// The renderer child process fails to launch in this restricted/remote session
-// too ("render-process-gone launch-failed, exitCode 18"): the Windows sandbox
-// cannot set up its restricted child tokens here. Disable it. Do NOT ship this
-// switch to normal user machines.
-app.commandLine.appendSwitch('no-sandbox');
+// 默认保留 Chromium 沙箱。仅允许开发环境为受限虚拟机显式关闭，
+// 防止本地诊断用的启动参数随安装包进入普通用户环境。
+if (!app.isPackaged && process.env.WTTCH_DISABLE_SANDBOX === '1') {
+  app.commandLine.appendSwitch('no-sandbox');
+}
 
 // ---------------------------------------------------------------------------
 // Platform / window styling
@@ -334,8 +351,15 @@ ipcMain.handle('iconfont:search', async (_event, body: string) => {
   }
 });
 
+// 主窗口单独记录，浮动 Widget 不能被误认为工作台，也不应阻止工作台重新打开。
+let workbenchWindow: BrowserWindow | undefined;
+// 保持托盘的强引用，避免垃圾回收使系统图标消失。
+let systemTray: ReturnType<typeof createSystemTray> | undefined;
+
 const createWindow = () => {
+  if (workbenchWindow && !workbenchWindow.isDestroyed()) return workbenchWindow;
   const mainWindow = new BrowserWindow({
+    icon: getApplicationIconPath(),
     width: 960,
     height: 640,
     minWidth: 600,
@@ -359,6 +383,22 @@ const createWindow = () => {
       backgroundThrottling: false,
     },
   });
+
+  workbenchWindow = mainWindow;
+  // Windows 注销/关机不一定先触发 before-quit，允许系统正常结束会话。
+  mainWindow.on('query-session-end', () => { quitting = true; });
+  mainWindow.on('close', (event) => {
+    if (quitting) return;
+    event.preventDefault();
+    if (shouldHideOnClose(preferences.get(), quitting, Boolean(systemTray))) mainWindow.hide();
+    else app.quit();
+  });
+  mainWindow.on('closed', () => {
+    if (workbenchWindow === mainWindow) workbenchWindow = undefined;
+    systemTray?.refresh();
+  });
+  mainWindow.on('show', () => systemTray?.refresh());
+  mainWindow.on('hide', () => systemTray?.refresh());
 
   if (CUSTOM_CHROME) {
     // Keep the custom title bar in sync with the real maximized state so the
@@ -473,12 +513,56 @@ const createWindow = () => {
       }
     });
   }
+  return mainWindow;
+};
+
+/** 托盘、Dock 共用恢复入口：最小化先还原，隐藏则显示，关闭后重新创建。 */
+const showWorkbench = () => {
+  const window = createWindow();
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
 };
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow);
+app.on('ready', () => {
+  if (!primaryInstance || quitting) return;
+  preferences = createPreferences(app.getPath('userData'));
+  // 只允许本应用文档访问 AI；开发时匹配 Vite origin 与入口路径，打包时匹配精确文件 URL。
+  const rendererUrl = MAIN_WINDOW_VITE_DEV_SERVER_URL
+    || pathToFileURL(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)).href;
+  const isAppUrl = (input: string) => {
+    try {
+      const actual = new URL(input);
+      const expected = new URL(rendererUrl);
+      return actual.protocol === expected.protocol && actual.host === expected.host && actual.pathname === expected.pathname;
+    } catch { return false; }
+  };
+  registerAiIpc(isAppUrl);
+  registerWechatIpc(isAppUrl);
+  registerDataIpc(isAppUrl, preferences, () => Boolean(systemTray), () => {
+    for (const window of floatingWidgets.values()) window.destroy();
+    floatingWidgets.clear();
+  });
+  // 开发进程也展示同一应用图标；发行版 Dock/Finder 图标由 ICNS 打包配置提供。
+  if (process.platform === 'darwin') app.dock?.setIcon(getApplicationIconPath());
+  try {
+    systemTray = createSystemTray({
+      show: showWorkbench,
+      hide: () => workbenchWindow?.hide(),
+      isVisible: () => Boolean(workbenchWindow && !workbenchWindow.isDestroyed() && workbenchWindow.isVisible()),
+      quit: () => app.quit(),
+    });
+  } catch (error) {
+    // 少数桌面环境没有托盘服务；保留工作台可用性，不让可选入口阻止应用启动。
+    console.error('[tray] 初始化失败：', error);
+  }
+  createWindow();
+});
+
+app.on('will-quit', () => { systemTray?.destroy(); systemTray = undefined; });
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
@@ -489,10 +573,7 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('activate', () => {
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
+// 即使浮动窗口仍然存在，点击 Dock 也应恢复主工作台。
+app.on('activate', () => { if (primaryInstance && app.isReady() && !quitting) showWorkbench(); });
+// 事件可能早于 ready：此时由 ready 正常创建窗口，不提前调用 BrowserWindow。
+app.on('second-instance', () => { if (app.isReady() && !quitting) showWorkbench(); });

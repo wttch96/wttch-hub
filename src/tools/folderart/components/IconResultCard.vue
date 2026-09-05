@@ -1,3 +1,7 @@
+<!--
+  文件说明：渲染单个图标搜索结果的预览和名称，并响应用户的图标选择操作。
+-->
+
 <script setup lang="ts">
 import { computed } from 'vue'
 import { normalizeSvgSize, parseViewBox } from '@/lib/svg'

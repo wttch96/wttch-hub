@@ -1,3 +1,7 @@
+/**
+ * 文件说明：由 packet.g4 自动生成的 ANTLR 词法分析器，将协议文本切分为标记；修改语法应编辑源文件并重新生成。
+ */
+
 // @ts-nocheck
 
 import * as antlr from "antlr4ng";

@@ -1,3 +1,7 @@
+<!--
+  文件说明：渲染独立浮动时钟，按插件设置展示时间并处理浮动窗口相关操作。
+-->
+
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, ref } from 'vue';
 import { AlarmClock, Lock, Pin, PinOff, Unlock, X } from 'lucide-vue-next';

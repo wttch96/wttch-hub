@@ -1,3 +1,7 @@
+<!--
+  文件说明：以工具卡片展示已启用插件，提供进入各工具页面的工具库入口。
+-->
+
 <script setup lang="ts">
 import { RouterLink } from 'vue-router';
 import { ChevronRight, Sparkles } from 'lucide-vue-next';

@@ -1,3 +1,7 @@
+/**
+ * 文件说明：管理待办事项和分组的响应式状态，校验持久化数据并通过插件存储同步列表变更。
+ */
+
 import { reactive, readonly } from 'vue';
 import type { Disposable, PluginComponentApi } from '@wttch-hub/plugin-api';
 
@@ -72,7 +76,9 @@ const validItems = (value: unknown, lanes: TodoLane[]): TodoItem[] => {
 export const connectTodoStore = (nextApi?: PluginComponentApi) => {
   if (!nextApi) return;
   api = nextApi;
-  if (!state.initialized) {
+  // 卸载期间订阅已断开，缓存可能落后于其他窗口；重连时以持久化数据为准。
+  // 页面和 Widget 共用现有订阅时不重复初始化，避免覆盖正在编辑的响应式状态。
+  if (!subscription) {
     const storedLanes = validLanes(api.storage.get<unknown>('lanes', []));
     state.lanes = storedLanes.length ? storedLanes : defaultLanes();
     state.items = validItems(api.storage.get<unknown>('items', []), state.lanes);

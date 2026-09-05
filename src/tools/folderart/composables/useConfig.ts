@@ -1,3 +1,7 @@
+/**
+ * 文件说明：维护图标生成器的响应式配置，读取和保存可持久化参数，并提供模板、文字和图标更新操作。
+ */
+
 // Reactive app configuration + localStorage persistence.
 import { reactive, toRaw } from 'vue'
 import { getStyle } from '@/tools/folderart/composables/useFolderComposition'

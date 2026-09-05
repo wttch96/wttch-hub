@@ -1,3 +1,7 @@
+/**
+ * 文件说明：提供移植自 wttch-labs 的工具所需的样式变量和基础控件样式，在工作台主样式之前加载。
+ */
+
 /* FolderArt · macOS folder icon generator */
 
 :root {
