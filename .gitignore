@@ -101,3 +101,4 @@ src/plugins/plugin-api.d.ts
 
 # 插件构建时生成的清单可由 npm run build:plugins 重建，不作为源码提交。
 plugin-src/.generated/
+sandbox/plugins/

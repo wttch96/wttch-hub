@@ -3,6 +3,8 @@
   "version": "1.1.0",
   "private": true,
   "description": "wttch-hub 定时闹钟插件。",
+  "dependencies": { "@wttch-hub/plugin-api": "1.0.0" },
+  "peerDependencies": { "vue": "^3.5.0", "lucide-vue-next": "^1.0.0" },
   "scripts": {
     "build": "tsx ../../scripts/build-plugins.ts",
     "test": "node --import tsx --test ../../tests/alarm.test.ts ../../tests/stores.test.ts"

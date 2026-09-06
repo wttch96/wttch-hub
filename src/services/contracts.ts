@@ -2,7 +2,7 @@
  * 文件说明：定义插件服务清单、微信订阅规则、连接状态和发送记录，以及渲染进程使用的桥接接口。
  */
 
-import type { Disposable, ServicePublishResult, ServiceOutput } from '../types/plugin';
+import type { Disposable, ServicePublishResult, ServiceOutput } from '@wttch-hub/plugin-api';
 export type ServiceDescriptor = { topic: string; name: string; description: string; enabled: boolean };
 export type WechatRule = { id: string; topic: string; peerId: string; enabled: boolean };
 export type WechatStatus = {

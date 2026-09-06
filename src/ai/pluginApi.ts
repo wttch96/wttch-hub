@@ -3,7 +3,7 @@
  */
 
 import type { AiBridge } from './contracts';
-import type { AiResult, Disposable, PluginAiApi, ToolPlugin } from '../types/plugin';
+import type { AiResult, Disposable, PluginAiApi, ToolPlugin } from '@wttch-hub/plugin-api';
 import { aiFailure } from './shared';
 
 /**

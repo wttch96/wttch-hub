@@ -2,7 +2,7 @@
  * 文件说明：集中维护 AI 默认状态、DeepSeek 模型选项和结果辅助函数，供配置、服务与界面复用。
  */
 
-import type { AiErrorCode, AiResult, AiStatus } from '../types/plugin';
+import type { AiErrorCode, AiResult, AiStatus } from '@wttch-hub/plugin-api';
 
 /** 下拉菜单的展示名称与 API 模型 ID 分开，保存和调用始终使用服务商的完整 ID。 */
 export const DEEPSEEK_MODELS = [

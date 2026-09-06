@@ -6,7 +6,7 @@
 import { computed, defineAsyncComponent, provide } from 'vue';
 import { findTool } from '../config/tools';
 import { pluginRuntime } from '../plugins/runtime';
-import { PLUGIN_COMPONENT_API_KEY } from '../types/plugin';
+import { PLUGIN_COMPONENT_API_KEY } from '@wttch-hub/plugin-api';
 
 const props = defineProps<{ pluginId: string }>();
 const plugin = findTool(props.pluginId);

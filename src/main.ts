@@ -25,20 +25,30 @@ type PluginPackageInfo = {
   file: string;
   capabilities?: string[];
   removable?: boolean;
-  source?: 'managed' | 'workspace';
+  source?: 'managed' | 'sandbox' | 'workspace';
 };
-type PluginBundle = { apiVersion: number; plugins: Omit<PluginPackageInfo, 'file'>[] };
-type FloatingWidgetOptions = { width?: number; height?: number; alwaysOnTop?: boolean; locked?: boolean };
+type PluginBundle = {
+  apiVersion: number;
+  plugins: Omit<PluginPackageInfo, 'file'>[]
+};
+type FloatingWidgetOptions = {
+  width?: number;
+  height?: number;
+  alwaysOnTop?: boolean;
+  locked?: boolean
+};
 
 const pluginDirectories = () => [
   { directory: path.join(app.getPath('userData'), 'plugins'), source: 'managed' as const, removable: true },
+  // 开发期构建的插件包固定进入项目沙盒，避免把可再生的 ZIP 混入源码或用户正式仓库。
+  { directory: path.join(process.cwd(), 'sandbox', 'plugins'), source: 'sandbox' as const, removable: true },
   { directory: path.join(process.cwd(), 'plugins'), source: 'workspace' as const, removable: false },
 ];
 const isSafePluginEntry = (entry: string) => {
   const normalized = path.posix.normalize(entry.replaceAll('\\', '/'));
   return normalized !== '.' && normalized !== '..' && !normalized.startsWith('../') && !path.posix.isAbsolute(normalized);
 };
-const readPluginPackage = (archivePath: string, meta: { source: 'managed' | 'workspace'; removable: boolean }): PluginPackageInfo[] => {
+const readPluginPackage = (archivePath: string, meta: { source: 'managed' | 'sandbox' | 'workspace'; removable: boolean }): PluginPackageInfo[] => {
   const file = path.basename(archivePath);
   try {
     if (fs.statSync(archivePath).size > 50 * 1024 * 1024) throw new Error('插件包超过 50 MB 限制');
@@ -369,11 +379,11 @@ const createWindow = () => {
     backgroundColor: CUSTOM_CHROME ? '#00000000' : undefined,
     ...(process.platform === 'darwin'
       ? {
-          titleBarStyle: 'hiddenInset' as const,
-          vibrancy: 'titlebar' as const,
-          visualEffectState: 'active' as const,
-          backgroundColor: '#00000000',
-        }
+        titleBarStyle: 'hiddenInset' as const,
+        vibrancy: 'titlebar' as const,
+        visualEffectState: 'active' as const,
+        backgroundColor: '#00000000',
+      }
       : {}),
     show: false,
     webPreferences: {

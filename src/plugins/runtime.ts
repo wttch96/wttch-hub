@@ -16,7 +16,7 @@ import type {
   PluginDeactivationReason,
   PluginLifecycleContext,
   ToolPlugin,
-} from '../types/plugin';
+} from '@wttch-hub/plugin-api';
 import { allTools } from '../config/tools';
 import { useSheet } from '../composables/useSheet';
 import { useToast } from '../composables/useToast';

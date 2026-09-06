@@ -3,7 +3,7 @@
  */
 
 import { computed, ref } from 'vue';
-import type { ToolPlugin } from '../types/plugin';
+import type { ToolPlugin } from '@wttch-hub/plugin-api';
 
 /** 独立于插件私有数据保存，避免浮动窗口保存 runtime 快照时覆盖菜单偏好。 */
 export const NAVIGATION_STORAGE_KEY = 'wttch-hub:navigation:v1';

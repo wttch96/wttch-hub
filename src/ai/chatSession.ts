@@ -3,7 +3,7 @@
  */
 
 import { reactive, readonly } from 'vue';
-import type { AiChatRequest, AiCompletion, AiError, AiMessage, AiResult } from '../types/plugin';
+import type { AiChatRequest, AiCompletion, AiError, AiMessage, AiResult } from '@wttch-hub/plugin-api';
 import { aiFailure } from './shared';
 
 export type ChatExchange = {

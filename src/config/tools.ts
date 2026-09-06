@@ -8,7 +8,7 @@ import {
   FolderOpen,
   Network,
 } from 'lucide-vue-next';
-import type { ToolPlugin } from '../types/plugin';
+import type { ToolPlugin } from '@wttch-hub/plugin-api';
 
 const builtinTools: ToolPlugin[] = [
   {

@@ -2,7 +2,7 @@
  * 文件说明：定义 AI 设置与主进程服务之间的桥接类型，约定配置、对话、连接测试和状态订阅接口。
  */
 
-import type { AiChatRequest, AiCompletion, AiResult, AiStatus, Disposable } from '../types/plugin';
+import type { AiChatRequest, AiCompletion, AiResult, AiStatus, Disposable } from '@wttch-hub/plugin-api';
 
 /** 宿主设置专用的写入协议：apiKey 不传表示保留，空字符串表示清除。 */
 export type AiConfigurationUpdate = {
