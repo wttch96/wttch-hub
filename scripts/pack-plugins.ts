@@ -7,7 +7,7 @@
  *
  * ZIP 内保留 <plugin-id>/... 源码目录，并在根部写入纯 JSON 清单；因此
  * 它既能被桌面插件仓库安全识别，也能由 install-plugins.ts 恢复到
- * src/plugins 后参与 Vite 编译。
+ * plugin-src 后参与 Vite 编译。
  */
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -15,7 +15,7 @@ import { strToU8, zipSync } from 'fflate';
 import type { PluginBundleDefinition, PluginPackageDefinition } from '../src/types/plugin';
 
 const root = process.cwd();
-const sourceRoot = path.join(root, 'src', 'plugins');
+const sourceRoot = path.join(root, 'plugin-src');
 const outputRoot = path.join(root, 'plugins');
 const pluginIds = ['system-monitor', 'theme', 'todo', 'alarm'];
 

@@ -1,0 +1,8 @@
+{
+  "name": "@wttch-hub/plugin-debug",
+  "version": "1.0.0",
+  "private": true,
+  "description": "wttch-hub 插件调试与测试运行环境的本地仓库边界。",
+  "main": "src/index.ts",
+  "types": "src/index.ts"
+}

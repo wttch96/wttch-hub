@@ -117,7 +117,7 @@ onMounted(refreshPackages);
           <RouterLink v-if="pluginRuntime.states[plugin.id]?.enabled" class="action primary" :to="`/tools/${plugin.path}`">
             打开工具 <ChevronRight :size="14" />
           </RouterLink>
-          <RouterLink class="action" to="/settings#plugins">
+          <RouterLink class="action" :to="`/plugins/${plugin.id}/settings`">
             <Settings2 :size="14" /> 插件设置
           </RouterLink>
           <button class="action" type="button" @click="toggle(plugin.id)">

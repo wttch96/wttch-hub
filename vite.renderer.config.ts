@@ -13,6 +13,8 @@ export default defineConfig({
     alias: {
       // Imported tools (wttch-labs) reference their shared code as '@/...'.
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // 插件公开 API 在当前单仓库阶段直接指向唯一源；未来拆包时仅替换此映射。
+      '@wttch-hub/plugin-api': fileURLToPath(new URL('./src/types/plugin.ts', import.meta.url)),
     },
   },
 });

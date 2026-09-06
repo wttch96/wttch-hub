@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { dueKey, isAlarmTime, nextAlarmOccurrence, type AlarmItem } from '../src/plugins/alarm/schedule';
+import { dueKey, isAlarmTime, nextAlarmOccurrence, type AlarmItem } from '../plugin-src/alarm/schedule';
 
 const alarm = (overrides: Partial<AlarmItem> = {}): AlarmItem => ({
   id: 'test', label: '测试', repeat: 'daily', time: '23:59', enabled: true,

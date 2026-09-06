@@ -98,3 +98,6 @@ plugins/*.zip
 # The reference external plugin is intentionally versioned as a distributable.
 !plugins/wttch-hub@plugins-1.0.0.zip
 src/plugins/plugin-api.d.ts
+
+# 插件构建时生成的清单可由 npm run build:plugins 重建，不作为源码提交。
+plugin-src/.generated/

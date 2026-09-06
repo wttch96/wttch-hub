@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "plugins": [
+    {
+      "id": "system-monitor",
+      "name": "系统监控",
+      "apiVersion": 1,
+      "source": "../plugin-src/system-monitor",
+      "kind": "bundled"
+    },
+    {
+      "id": "theme",
+      "name": "主题配色",
+      "apiVersion": 1,
+      "source": "../plugin-src/theme",
+      "kind": "bundled"
+    },
+    {
+      "id": "todo",
+      "name": "Todo 泳道看板",
+      "apiVersion": 1,
+      "source": "../plugin-src/todo",
+      "kind": "bundled"
+    },
+    {
+      "id": "alarm",
+      "name": "定时闹钟",
+      "apiVersion": 1,
+      "source": "../plugin-src/alarm",
+      "kind": "bundled"
+    }
+  ]
+}

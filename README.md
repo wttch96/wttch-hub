@@ -6,6 +6,8 @@
 
 一个基于 Electron + Vue 3 的桌面「小工具集」外壳：在 **Windows** 上渲染出 macOS 风格的异形窗口（无边框圆角 + 红绿灯控制按钮 + 可拖拽顶栏），内嵌可折叠侧栏与多页面路由，并集成了从 [wttch-labs](https://github.com/wttch/wttch-labs) 移植来的四个小工具。
 
+完整功能、架构、插件开发、服务与运维说明见 [docs/README.md](docs/README.md)。
+
 ## 功能
 
 - **macOS 风格窗口（仅 Windows）**：`main` 用 `frame:false + transparent` 建无边框窗口，页面根节点以 CSS `border-radius` 画圆角形成异形形状；渲染层用自绘的「红绿灯」（关闭 / 最小化 / 缩放）通过 IPC 控制真实窗口；顶栏整条可拖拽移动窗口（`-webkit-app-region: drag`），双击顶栏走系统默认的最大化 / 还原。
@@ -38,9 +40,20 @@ Windows 使用多尺寸 ICO，macOS 菜单栏使用能随系统明暗自动着�
 
 ## 插件
 
-工具通过 `src/types/plugin.ts` 中版本化的 `ToolPlugin` API 声明（当前 `apiVersion: 1`）。内置工具注册在 `src/config/tools.ts`；放入 `src/plugins/<id>/index.ts` 的插件会由 `import.meta.glob` 自动发现，并按声明生成工具路由、主页 Widget、statusbar 和设置表单。`src/plugins/runtime.ts` 是统一状态机，负责加载、引用计数激活、停用、卸载、错误隔离、设置事件以及插件私有存储。插件组件通过 `window.toolHost` 使用宿主能力，例如 `window.toolHost?.systemStats()`，不直接访问 Electron IPC。
+工具通过 `src/types/plugin.ts` 中版本化的 `ToolPlugin` API 声明（当前 `apiVersion: 1`）。内置工具注册在 `src/config/tools.ts`；所有可执行插件位于 `plugin-src/<id>/index.ts`，由 `import.meta.glob` 自动发现，并按声明生成工具路由、主页 Widget、statusbar 和独立设置页。每个插件在“插件”管理页通过“插件设置”进入 `/plugins/<plugin-id>/settings`，集中管理页不再混排各插件字段。`src/plugins/runtime.ts` 是统一状态机，负责加载、引用计数激活、停用、卸载、错误隔离、设置事件以及插件私有存储。插件组件通过 `window.toolHost` 使用宿主能力，例如 `window.toolHost?.systemStats()`，不直接访问 Electron IPC。
 
-系统监控、主题配置、Todo 清单和闹钟提醒源码位于 `src/plugins/`，分别示范 Widget/系统能力、主题 token、私有数据存储和桌面通知。插件包定义写在各自的 `package.ts` 中；运行 `npm run install:plugin-api` 会先卸载旧版本，再将最新的 `@wttch-hub/plugin-api` 安装到 `node_modules`，插件通过包名直接导入宿主 API 类型和定义函数。插件集合 ZIP 由独立的外部打包流程生成，`npm run install:plugins` 可将集合包整体安装或更新到 `src/plugins/`。插件页面还可以用系统文件选择器把 ZIP 加载到 Electron `userData/plugins` 仓库，主进程会限制包体积、验证 API 版本、ID、入口路径和重复 ID；托管仓库中的包可以删除。
+系统监控、主题配置、Todo 清单和闹钟提醒源码位于 `plugin-src/`，分别示范 Widget/系统能力、主题 token、私有数据存储和桌面通知。每个插件都包含自己的 `package.json`，提供 `npm run build` 和 `npm test` 入口；工作台的启动、打包与制作安装包会先自动构建全部插件。插件包定义写在各自的 `package.ts` 中；运行 `npm run install:plugin-api` 会先卸载旧版本，再将最新的 `@wttch-hub/plugin-api` 安装到 `node_modules`，插件通过包名直接导入宿主 API 类型和定义函数。插件集合 ZIP 由独立的外部打包流程生成，`npm run install:plugins` 可将集合包整体安装或更新到 `plugin-src/`。插件页面还可以用系统文件选择器把 ZIP 加载到 Electron `userData/plugins` 仓库，主进程会限制包体积、验证 API 版本、ID、入口路径和重复 ID；托管仓库中的包可以删除。
+
+### 本地多仓库边界
+
+在接入 GitHub 前，插件相关代码已经按未来仓库拆分为本项目内的独立目录：
+
+- `packages/plugin-api/`：公开 API 包边界；当前唯一类型源仍是 `src/types/plugin.ts`，由 `npm run install:plugin-api` 生成本地包。
+- `packages/plugin-debug/`：无 Electron、无网络和无真实密钥的内存调试宿主；本地 TypeScript 与 Vite 已映射到 `@wttch-hub/plugin-debug`，插件测试可直接从该包名导入。
+- `plugin-registry/`：只保存版本化插件声明 `plugins.json`，用于审查身份、API 兼容版本和本地源码位置。
+- `plugin-src/`：所有本地插件源码根目录；每个插件都有 npm `build` / `test` 入口，复制 `examples/hello-plugin` 到该目录下一层后即可被构建发现。
+
+运行 `npm run check:plugins` 会同时校验声明文件与本地开发插件的 `index.ts`、`package.ts` 是否齐全。上述四个目录以后可以原样拆成各自 Git 仓库；当前不需要网络，也不会从 GitHub 下载或执行任何远程代码。
 
 ### 统一 AI 服务与右侧聊天
 
@@ -238,7 +251,7 @@ npm start
 
 ### 插件开发流程
 
-插件 API 的唯一源定义是 `src/types/plugin.ts`。插件开发前先运行：
+插件 API 的唯一源定义是 `src/types/plugin.ts`，未来对应 `packages/plugin-api/` 独立仓库。插件开发前先运行：
 
 ```bash
 npm install
@@ -247,7 +260,7 @@ npm run install:plugin-api
 
 `install:plugin-api` 会读取宿主的 TypeScript API 定义，在系统临时目录生成 npm package，先卸载旧的 `@wttch-hub/plugin-api`，再安装新版本到 `node_modules`。它不会把类型文件复制到 `src/plugins`，也不会修改宿主的 `package.json`。
 
-插件源码放在 `src/plugins/<plugin-id>/`，入口通常是 `index.ts`，包信息写在同目录的 `package.ts`：
+所有插件源码放在 `plugin-src/<plugin-id>/`，入口通常是 `index.ts`，包信息写在同目录的 `package.ts`：
 
 ```ts
 import {
@@ -264,11 +277,11 @@ export default definePluginPackage({
 });
 ```
 
-工具入口在同一个目录中使用 `defineToolPlugin(...)` 导出。宿主会自动扫描 `src/plugins`，并根据声明生成工具路由、Widget、状态栏和设置入口。插件需要系统数据时，通过 `window.toolHost` 使用宿主能力，不要直接导入 Electron 或访问 IPC。
+工具入口在同一个目录中使用 `defineToolPlugin(...)` 导出。宿主会自动扫描 `plugin-src`，并根据声明生成工具路由、Widget、状态栏和设置入口。执行 `npm run start` 时会先自动运行 `npm run build:plugins`，再由 Vite 编译和加载全部插件。插件需要系统数据时，通过 `window.toolHost` 使用宿主能力，不要直接导入 Electron 或访问 IPC。写单元测试时，可从 `@wttch-hub/plugin-debug` 调用 `createPluginDebugHost({ pluginId })`，获得只在内存中运行的 `context('startup')` 和副作用记录。
 
 插件 API 更新后，重新运行 `npm run install:plugin-api`；开发服务器需要重启才能重新解析依赖。插件的启用状态和配置由宿主设置页管理，路由切换时宿主会执行插件事件回调返回的 cleanup 函数。
 
-系统监控、主题配置、Todo 清单与闹钟提醒作为完整的外置插件示例发布。修改 `src/plugins/` 后运行 `npm run pack:plugins`，会将入口、Vue 页面、Widget、主题定义、包清单和插件 API 类型快照压缩到 `plugins/wttch-hub@plugins-1.0.0.zip`。在一份没有已安装源码的工作区中，把该 ZIP 放入 `plugins/` 并运行 `npm run install:plugins`，即可恢复插件源码后参与构建。
+系统监控、主题配置、Todo 清单与闹钟提醒作为完整的外置插件示例发布。修改 `plugin-src/` 后运行 `npm run pack:plugins`，会将入口、Vue 页面、Widget、主题定义、包清单和插件 API 类型快照压缩到 `plugins/wttch-hub@plugins-1.0.0.zip`。在一份没有已安装源码的工作区中，把该 ZIP 放入 `plugins/` 并运行 `npm run install:plugins`，即可恢复插件源码后参与构建。
 
 ### 开发诊断
 

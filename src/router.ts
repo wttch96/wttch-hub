@@ -9,6 +9,7 @@ import ToolsView from './views/ToolsView.vue';
 import SettingsView from './views/SettingsView.vue';
 import OverlayDemoView from './views/OverlayDemoView.vue';
 import PluginsView from './views/PluginsView.vue';
+import PluginSettingsView from './views/PluginSettingsView.vue';
 import { allTools } from './config/tools';
 import { pluginRuntime } from './plugins/runtime';
 import PluginToolHost from './components/PluginToolHost.vue';
@@ -45,6 +46,13 @@ const router = createRouter({
     },
     { path: '/settings', name: 'settings', component: SettingsView },
     { path: '/plugins', name: 'plugins', component: PluginsView },
+    {
+      path: '/plugins/:pluginId/settings',
+      name: 'plugin-settings',
+      component: PluginSettingsView,
+      props: true,
+      meta: { pluginSettings: true },
+    },
     { path: '/examples/overlays', name: 'overlay-demo', component: OverlayDemoView },
     {
       path: '/floating/:pluginId',

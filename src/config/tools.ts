@@ -60,17 +60,16 @@ const builtinTools: ToolPlugin[] = [
   },
 ];
 
-// Plugin entry points are discovered at build time. Their page and widget
-// components remain lazy, so adding a directory under /plugins is enough to
-// make a plugin available to routes and the home widget library.
-const externalPlugins = import.meta.glob('../plugins/*/index.ts', {
+// 所有可执行插件统一放在 plugin-src。工作台启动前先生成清单，Vite 再在
+// 此处发现入口并编译页面和 Widget；组件保持懒加载，避免启动时加载全部代码。
+const pluginSources = import.meta.glob('../../plugin-src/*/index.ts', {
   eager: true,
   import: 'default',
 }) as Record<string, ToolPlugin>;
 
 export const allTools: ToolPlugin[] = [
   ...builtinTools,
-  ...Object.values(externalPlugins),
+  ...Object.values(pluginSources),
 ];
 
 /** @deprecated Prefer pluginRuntime.enabledTools in UI code. */

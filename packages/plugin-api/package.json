@@ -1,0 +1,6 @@
+{
+  "name": "@wttch-hub/plugin-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "wttch-hub 插件公开 API 的本地仓库边界。"
+}

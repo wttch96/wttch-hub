@@ -1,0 +1,10 @@
+{
+  "name": "@wttch-hub/plugin-hello",
+  "version": "0.1.0",
+  "private": true,
+  "description": "wttch-hub 插件开发模板。",
+  "scripts": {
+    "build": "tsx ../../../scripts/build-plugins.ts",
+    "test": "node --import tsx --test ../../../tests/plugin-debug.test.ts"
+  }
+}

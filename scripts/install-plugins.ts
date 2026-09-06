@@ -6,7 +6,7 @@
  * 安装或更新 wttch-hub 插件集合包。
  *
  * 扫描 plugins/wttch-hub@plugins-<version>.zip，校验根 package.json 后，
- * 将其中的 <plugin-id>/... 整体恢复到 src/plugins/<plugin-id>/。这是源码
+ * 将其中的 <plugin-id>/... 整体恢复到 plugin-src/<plugin-id>/。这是源码
  * 安装命令，完成后 Vite 可以直接发现这些插件并继续开发。
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -16,7 +16,7 @@ import type { PluginBundleDefinition } from '../src/types/plugin';
 
 const root = process.cwd();
 const packageRoot = path.join(root, 'plugins');
-const sourceRoot = path.join(root, 'src', 'plugins');
+const sourceRoot = path.join(root, 'plugin-src');
 
 /** 只允许 ZIP 内相对路径，防止解压路径逃逸到项目目录之外。 */
 const isSafePath = (entry: string) => {

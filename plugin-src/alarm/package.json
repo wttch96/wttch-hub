@@ -1,0 +1,10 @@
+{
+  "name": "@wttch-hub/plugin-alarm",
+  "version": "1.1.0",
+  "private": true,
+  "description": "wttch-hub 定时闹钟插件。",
+  "scripts": {
+    "build": "tsx ../../scripts/build-plugins.ts",
+    "test": "node --import tsx --test ../../tests/alarm.test.ts ../../tests/stores.test.ts"
+  }
+}

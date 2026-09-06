@@ -5,8 +5,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { PluginComponentApi, PluginStorageApi } from '../src/types/plugin';
-import { addAlarm, alarmState, startAlarmScheduler } from '../src/plugins/alarm/store';
-import { connectTodoStore, disconnectTodoStore, todoState } from '../src/plugins/todo/store';
+import { addAlarm, alarmState, startAlarmScheduler } from '../plugin-src/alarm/store';
+import { connectTodoStore, disconnectTodoStore, todoState } from '../plugin-src/todo/store';
 
 /** 模拟宿主存储，保留真实订阅广播行为；直接改 data 模拟插件卸载期间的外部写入。 */
 const createHost = () => {
