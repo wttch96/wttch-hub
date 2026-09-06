@@ -13,4 +13,6 @@ const host = createPluginDebugHost({ pluginId: 'my-plugin' });
 await plugin.events?.load?.(host.context('startup'));
 ```
 
-当前仓库的 TypeScript 与 Vite 都把 `@wttch-hub/plugin-api`、`@wttch-hub/plugin-debug` 映射到本地唯一源，因此无需依赖 `node_modules` 的安装顺序。插件在本项目内测试时可直接从包名导入；拆分成独立仓库后，将这两个目录发布为 npm 包即可保持测试代码不变。
+本包通过 npm workspace 依赖 `@wttch-hub/plugin-api`，由 `node_modules` 中的工作区链接统一解析。插件在本项目内测试时直接从包名导入；运行 `npm run install:packages` 可重建所有链接，拆分成独立仓库后测试代码不需要改动。
+
+相关指南：[开发新插件](../../docs/new-plugin.md)、[扩展插件 API](../../docs/extending-plugin-api.md)。

@@ -12,9 +12,7 @@
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "paths": {
-      "@/*": ["src/*"],
-      "@wttch-hub/plugin-api": ["src/types/plugin.ts"],
-      "@wttch-hub/plugin-debug": ["packages/plugin-debug/src/index.ts"]
+      "@/*": ["src/*"]
     }
   }
 }

@@ -25,13 +25,15 @@ npm --prefix plugin-src/alarm test
 
 ## 自动构建与加载
 
-`npm start`、`npm run package` 和 `npm run make` 都会先执行 `build:plugins`。随后渲染进程通过 `import.meta.glob('../../plugin-src/*/index.ts')` 发现所有插件入口，Vite 将 Vue 页面和 Widget 编译到工作台产物中。新增或移动插件后需要重启开发服务器。
+`npm start`、`npm run package` 和 `npm run make` 都会先执行 `prepare:plugins`：校验插件、生成清单、打包 ZIP，并将 ZIP 安装到 `sandbox/plugins`。随后渲染进程通过 `import.meta.glob('../../plugin-src/*/index.ts')` 发现所有插件入口，Vite 将 Vue 页面和 Widget 编译到工作台产物中；主进程同时扫描开发沙盒中的已安装 ZIP。新增或移动插件后需要重启开发服务器。
 
-当前桌面应用不会将任意 ZIP 中的 TypeScript/Vue 源码直接当作 JavaScript 运行。ZIP 安装会被校验并恢复到 `plugin-src`，随后必须重新构建；这避免了把未经构建和审查的代码直接执行在可信渲染器中。
+当前桌面应用不会将任意 ZIP 中的 TypeScript/Vue 源码直接当作 JavaScript 运行。CLI 安装会校验 ZIP 后放入 `sandbox/plugins`；源码始终保留在 `plugin-src` 并参与 Vite 构建。这避免了把未经构建和审查的代码直接执行在可信渲染器中。
 
 ## 公共 API 与测试
 
-插件只从 `@wttch-hub/plugin-api` 导入 `defineToolPlugin`、`definePluginPackage` 和类型。当前 API 真源是 `src/types/plugin.ts`，`packages/plugin-api` 是未来独立 npm 仓库边界。插件不得直接使用 Electron IPC；宿主按能力声明提供 AI、存储、数据快照、服务分发、通知、系统状态和 UI 接口。
+插件只从 `@wttch-hub/plugin-api` 导入 `defineToolPlugin`、`definePluginPackage` 和类型。API 真源是 `packages/plugin-api/src/index.ts`；根目录与各插件通过 npm workspace 在 `node_modules` 中解析该包。插件不得直接使用 Electron IPC；宿主按能力声明提供 AI、存储、数据快照、服务分发、通知、系统状态和 UI 接口。
+
+根目录 `package.json` 的 `workspaces` 定义了 `packages/*` 和 `plugin-src/*`。运行 `npm run install:packages` 会离线重建工作区链接；`npm run build:packages` 与 `npm run test:packages` 会遍历全部包。每个包都具有 `npm pack` 可消费的 `main`、`types`、版本和依赖声明，开发时不使用相对目录依赖。
 
 `@wttch-hub/plugin-debug` 提供无 Electron、无网络、无真实密钥的内存调试宿主。`createPluginDebugHost({ pluginId })` 可生成生命周期 context、隔离 storage/settings，并记录通知、Toast 与服务发布，适合插件单元测试。
 

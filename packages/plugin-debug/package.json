@@ -1,8 +1,16 @@
 {
   "name": "@wttch-hub/plugin-debug",
   "version": "1.0.0",
-  "private": true,
-  "description": "wttch-hub 插件调试与测试运行环境的本地仓库边界。",
+  "description": "wttch-hub 插件调试与测试运行环境。",
   "main": "src/index.ts",
-  "types": "src/index.ts"
+  "types": "src/index.ts",
+  "files": ["src"],
+  "scripts": {
+    "build": "tsc --noEmit --target esnext --skipLibCheck --module esnext --moduleResolution node --allowImportingTsExtensions src/index.ts",
+    "test": "node --import tsx --test ../../tests/plugin-debug.test.ts",
+    "pack:local": "npm pack"
+  },
+  "dependencies": {
+    "@wttch-hub/plugin-api": "1.0.0"
+  }
 }

@@ -7,7 +7,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcRendererEvent } from 'electron';
 import type { AiBridge } from './ai/contracts';
-import type { AiStatus } from './types/plugin';
+import type { AiStatus, FloatingWidgetWindowOptions, PluginNotification } from '@wttch-hub/plugin-api';
 
 // On Windows the renderer draws a full macOS-style title bar, so expose a
 // small, explicit surface for driving the native window from the page.
@@ -36,9 +36,9 @@ const windowControls = {
 
 const toolHost = {
   stats: () => ipcRenderer.invoke('system:stats'),
-  showNotification: (options: import('./types/plugin').PluginNotification) => ipcRenderer.invoke('notifications:show', options),
-  openFloatingWidget: (pluginId: string, options?: import('./types/plugin').FloatingWidgetWindowOptions) => ipcRenderer.invoke('floating-widget:open', pluginId, options),
-  updateFloatingWidget: (pluginId: string, options: import('./types/plugin').FloatingWidgetWindowOptions) => ipcRenderer.invoke('floating-widget:update', pluginId, options),
+  showNotification: (options: PluginNotification) => ipcRenderer.invoke('notifications:show', options),
+  openFloatingWidget: (pluginId: string, options?: FloatingWidgetWindowOptions) => ipcRenderer.invoke('floating-widget:open', pluginId, options),
+  updateFloatingWidget: (pluginId: string, options: FloatingWidgetWindowOptions) => ipcRenderer.invoke('floating-widget:update', pluginId, options),
   closeFloatingWidget: (pluginId: string) => ipcRenderer.invoke('floating-widget:close', pluginId),
 };
 

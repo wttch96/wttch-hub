@@ -2,7 +2,7 @@
  * 文件说明：实现统一 AI 请求服务，管理配置、鉴权、请求校验、并发、超时取消和服务商响应转换。
  */
 
-import type { AiChatRequest, AiCompletion, AiResult, AiStatus, AiError, AiMessage } from '../types/plugin';
+import type { AiChatRequest, AiCompletion, AiResult, AiStatus, AiError, AiMessage } from '@wttch-hub/plugin-api';
 import { defaultConfiguration, validateConfiguration, type StoredAiConfiguration } from './config';
 import { aiFailure, isRecord } from './shared';
 

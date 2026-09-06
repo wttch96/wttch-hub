@@ -1,5 +1,5 @@
 /**
- * 文件说明：兼容旧的宿主内部导入路径；新代码应从 @wttch-hub/plugin-api 包导入同一份公共 API。
+ * 文件说明：发布为 @wttch-hub/plugin-api 的插件公共 API，约定插件清单、生命周期、存储、AI 和服务分发接口。
  */
 
 import type { Component } from 'vue';

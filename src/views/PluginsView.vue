@@ -7,7 +7,7 @@ import { computed, onMounted, ref } from 'vue';
 import { Check, ChevronRight, Package, Settings2, Power, PowerOff, Trash2, Upload } from 'lucide-vue-next';
 import { RouterLink } from 'vue-router';
 import { allTools as tools } from '../config/tools';
-import type { PluginPackageInfo } from '../types/plugin';
+import type { PluginPackageInfo } from '@wttch-hub/plugin-api';
 import { pluginRuntime } from '../plugins/runtime';
 import { useToast } from '../composables/useToast';
 
@@ -82,7 +82,7 @@ onMounted(refreshPackages);
       <div class="summary-item"><strong>{{ packages.length }}</strong><span>已识别 ZIP 包</span></div>
       <div class="summary-note">
         <Package :size="16" />
-        <span>{{ packageError ? '插件包信息暂时不可用' : '插件包仓库：应用数据目录 / plugins' }}</span>
+        <span>{{ packageError ? '插件包信息暂时不可用' : '插件包仓库：应用数据目录 / sandbox / 工作区' }}</span>
       </div>
     </div>
 
@@ -135,7 +135,7 @@ onMounted(refreshPackages);
           <span class="loaded is-disabled">待编译</span>
         </div>
         <p class="description">插件包已进入应用仓库，但当前构建未包含它的 Vue/TypeScript 入口。将包放入项目 plugins 目录、运行安装脚本并重新构建后即可启用。</p>
-        <div class="package-state"><Package :size="14" /><span>{{ pkg.file }} · {{ pkg.source === 'managed' ? '应用插件仓库' : '工作区' }}</span></div>
+        <div class="package-state"><Package :size="14" /><span>{{ pkg.file }} · {{ pkg.source === 'managed' ? '应用插件仓库' : pkg.source === 'sandbox' ? '开发沙盒' : '工作区' }}</span></div>
         <footer class="plugin-actions">
           <button v-if="pkg.removable" class="action danger" type="button" :disabled="busy" @click="removePackage(pkg)"><Trash2 :size="14" /> 删除插件包</button>
         </footer>

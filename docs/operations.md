@@ -13,7 +13,8 @@
 | `npm run typecheck` | TypeScript 类型检查 |
 | `npm run lint` | ESLint 检查 |
 | `npm run pack:plugins` | 将 `plugin-src` 打为插件集合 ZIP |
-| `npm run install:plugins` | 将本地插件集合 ZIP 安装回 `plugin-src` |
+| `npm run install:plugins` | 将本地插件集合 ZIP 安装到 `sandbox/plugins` |
+| `npm run prepare:plugins` | 校验、打包并安装全部插件到开发沙盒 |
 | `npm run package` | 自动构建插件后生成未安装应用 |
 | `npm run make` | 自动构建插件后生成平台安装包 |
 | `npm run build:icons` | 生成 PNG、ICO 与 ICNS 图标资源 |

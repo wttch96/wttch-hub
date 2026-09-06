@@ -2,7 +2,7 @@
  * 文件说明：基于插件自身存储创建数据管理 API，提供键列表、字节用量、独立快照导出、恢复和清空。
  */
 
-import type { PluginDataApi, PluginDataSnapshot } from '../types/plugin';
+import type { PluginDataApi, PluginDataSnapshot } from '@wttch-hub/plugin-api';
 import { isRecord, validateJson } from './backup';
 
 /** 数据 API 与 storage 共用同一个插件命名空间；导出使用深拷贝，调用方无法间接修改宿主状态。 */

@@ -3,7 +3,7 @@
  */
 
 import { reactive, readonly } from 'vue';
-import type { AiChatRequest, AiCompletion, AiResult, AiStatus, Disposable } from '../types/plugin';
+import type { AiChatRequest, AiCompletion, AiResult, AiStatus, Disposable } from '@wttch-hub/plugin-api';
 import type { AiConfigurationUpdate } from '../ai/contracts';
 import { aiFailure, DEFAULT_AI_STATUS } from '../ai/shared';
 

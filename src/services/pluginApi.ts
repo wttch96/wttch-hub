@@ -2,7 +2,7 @@
  * 文件说明：为插件提供固定命名空间的服务发布接口，检查声明与启用状态，避免插件直接指定微信接收人。
  */
 
-import type { PluginServicesApi, ToolPlugin } from '../types/plugin';
+import type { PluginServicesApi, ToolPlugin } from '@wttch-hub/plugin-api';
 import type { ServiceBridge } from './contracts';
 /** 发布主题固定属于当前插件；禁用或未声明服务时，即使持有旧引用也不能调用。 */
 export function createPluginServicesApi(plugin: ToolPlugin, enabled: () => boolean, bridge: () => ServiceBridge | undefined): PluginServicesApi {

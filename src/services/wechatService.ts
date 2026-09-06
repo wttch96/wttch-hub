@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { isRecord, validateJson } from '../data/backup';
-import type { ServiceOutput, ServicePublishResult } from '../types/plugin';
+import type { ServiceOutput, ServicePublishResult } from '@wttch-hub/plugin-api';
 import type { ServiceDescriptor, WechatRule, WechatStatus } from './contracts';
 import { officialBase, WECHAT_BASE, WechatError, type WechatRequest } from './wechatClient';
 

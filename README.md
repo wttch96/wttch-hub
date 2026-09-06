@@ -6,7 +6,18 @@
 
 一个基于 Electron + Vue 3 的桌面「小工具集」外壳：在 **Windows** 上渲染出 macOS 风格的异形窗口（无边框圆角 + 红绿灯控制按钮 + 可拖拽顶栏），内嵌可折叠侧栏与多页面路由，并集成了从 [wttch-labs](https://github.com/wttch/wttch-labs) 移植来的四个小工具。
 
-完整功能、架构、插件开发、服务与运维说明见 [docs/README.md](docs/README.md)。
+## 文档
+
+| 文档 | 内容 |
+| --- | --- |
+| [文档总览](docs/README.md) | 全部文档入口与阅读路径 |
+| [工作台功能](docs/workbench.md) | 页面、插件设置、导航、Widget、AI 抽屉与托盘 |
+| [插件开发概览](docs/plugin-development.md) | `plugin-src`、npm workspace、构建与自动加载 |
+| [开发新插件](docs/new-plugin.md) | 模板、依赖、实现、测试、沙盒安装和发布准备 |
+| [扩展插件 API](docs/extending-plugin-api.md) | 新能力设计、IPC、运行时注入、测试与版本发布 |
+| [系统架构](docs/architecture.md) | Electron 进程边界、插件运行时与数据流 |
+| [AI、微信与数据管理](docs/services-and-data.md) | AI、服务订阅、数据快照、备份与凭据边界 |
+| [构建与发布](docs/operations.md) | 本地开发、工作区构建、测试、打包与发布检查 |
 
 ## 功能
 
