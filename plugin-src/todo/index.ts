@@ -5,6 +5,8 @@
 import { ListTodo } from 'lucide-vue-next';
 import { defineToolPlugin, type PluginComponentApi } from '@wttch-hub/plugin-api';
 import { connectTodoStore, disconnectTodoStore } from './store';
+import { addTodo, moveTodo, removeTodo, todoState } from './store';
+import { registerAiTool } from '../../src/ai/tools';
 
 type ThemeExtension = {
   registerColor(key: string, defaultValue: string, description?: string): { dispose(): void };
@@ -30,12 +32,45 @@ export default defineToolPlugin({
   tags: ['Todo', 'Markdown', '看板', '泳道'],
   tint: ['#30a46c', 'rgba(48, 164, 108, 0.12)'],
   component: () => import('./components/TodoPage.vue'),
-  capabilities: { toast: true },
+  capabilities: { toast: true, ai: true },
   events: {
     load(context) {
       connectTodoStore(context as PluginComponentApi);
+      const aiTools = [
+        registerAiTool({
+          name: 'todo_add', description: '新增一条待办。laneId 省略时放入待处理泳道。',
+          parameters: { type: 'object', properties: { title: { type: 'string' }, body: { type: 'string' }, dueAt: { type: 'string' }, priority: { type: 'string', enum: ['low', 'normal', 'high'] }, laneId: { type: 'string' } }, required: ['title'], additionalProperties: false },
+          invoke: (args) => {
+            if (typeof args.title !== 'string') throw new Error('title 必须是文本');
+            const added = addTodo({ title: args.title, body: typeof args.body === 'string' ? args.body : undefined, dueAt: typeof args.dueAt === 'string' ? args.dueAt : undefined, priority: args.priority === 'low' || args.priority === 'high' || args.priority === 'normal' ? args.priority : undefined, laneId: typeof args.laneId === 'string' ? args.laneId : undefined });
+            if (!added) throw new Error('无法新增待办，请检查标题和泳道 ID');
+            return todoState.items.at(-1);
+          },
+        }),
+        registerAiTool({
+          name: 'todo_list', description: '查看当前待办和泳道，用于确认可操作的待办 ID、泳道 ID 与状态。',
+          parameters: { type: 'object', properties: {}, additionalProperties: false },
+          invoke: () => ({ lanes: todoState.lanes, items: todoState.items }),
+        }),
+        registerAiTool({
+          name: 'todo_delete', description: '按待办 ID 删除一条待办。',
+          parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false },
+          invoke: (args) => {
+            if (typeof args.id !== 'string' || !todoState.items.some(item => item.id === args.id)) throw new Error('找不到该待办');
+            removeTodo(args.id); return { deleted: args.id };
+          },
+        }),
+        registerAiTool({
+          name: 'todo_move', description: '把待办移动到指定泳道；可选 beforeId 将它放到另一待办之前。',
+          parameters: { type: 'object', properties: { id: { type: 'string' }, laneId: { type: 'string' }, beforeId: { type: 'string' } }, required: ['id', 'laneId'], additionalProperties: false },
+          invoke: (args) => {
+            if (typeof args.id !== 'string' || typeof args.laneId !== 'string' || !moveTodo(args.id, args.laneId, typeof args.beforeId === 'string' ? args.beforeId : undefined)) throw new Error('无法移动待办，请检查待办和泳道 ID');
+            return todoState.items.find(item => item.id === args.id);
+          },
+        }),
+      ];
       const theme = context.extensions.getExtension<ThemeExtension>('theme');
-      if (!theme) return disconnectTodoStore;
+      if (!theme) return () => { aiTools.reverse().forEach(tool => tool.dispose()); disconnectTodoStore(); };
       const registrations = [
         theme.registerColor('todo.priority-low', '#168A45', 'Todo 低优先级颜色'),
         theme.registerColor('todo.priority-normal', '#0A84FF', 'Todo 普通优先级颜色'),
@@ -43,7 +78,7 @@ export default defineToolPlugin({
         theme.onDidChange(() => applyPriorityColors(theme)),
       ];
       applyPriorityColors(theme);
-      return () => { registrations.reverse().forEach(item => item.dispose()); disconnectTodoStore(); };
+      return () => { aiTools.reverse().forEach(tool => tool.dispose()); registrations.reverse().forEach(item => item.dispose()); disconnectTodoStore(); };
     },
     activate() { return { dispose() { /* 页面与 Widget 不持有额外资源。 */ } }; },
     deactivate() { /* 数据由插件私有存储持续保存。 */ },

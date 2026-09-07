@@ -154,7 +154,10 @@ export type AiErrorCode = 'NOT_CONFIGURED' | 'DISABLED' | 'FORBIDDEN' | 'INVALID
 export type AiError = { code: AiErrorCode; message: string; retryable: boolean; status?: number };
 /** 使用普通可序列化对象跨 IPC 返回错误，避免 Electron 丢失自定义 Error 的属性。 */
 export type AiResult<T> = { ok: true; value: T } | { ok: false; error: AiError };
-export type AiMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+/** OpenAI-compatible function declaration, kept serializable for the IPC boundary. */
+export type AiToolDefinition = { name: string; description: string; parameters: Record<string, unknown> };
+export type AiToolCall = { id: string; name: string; args: Record<string, unknown> };
+export type AiMessage = { role: 'system' | 'user' | 'assistant' | 'tool'; content: string; toolCallId?: string; toolCalls?: AiToolCall[] };
 export type AiGenerationOptions = {
   /** 单次调用覆盖插件默认提示词；不自动读取页面、文件或其他插件的内容。 */
   systemPrompt?: string;
@@ -169,6 +172,8 @@ export type AiGenerationOptions = {
 };
 export type AiChatRequest = AiGenerationOptions & {
   messages: AiMessage[];
+  /** Tools are declarations only. Their implementation remains in the renderer/plugin. */
+  tools?: AiToolDefinition[];
   /** 可选的请求 ID，用于 cancel；同一个调用方的并行请求必须使用不同 ID。 */
   requestId?: string;
 };
@@ -178,6 +183,7 @@ export type AiCompletion = {
   model: string;
   finishReason: string;
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  toolCalls?: AiToolCall[];
 };
 export type AiStatus = {
   enabled: boolean;

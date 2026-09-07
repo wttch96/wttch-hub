@@ -6,6 +6,7 @@ import { reactive, readonly } from 'vue';
 import type { AiChatRequest, AiCompletion, AiResult, AiStatus, Disposable } from '@wttch-hub/plugin-api';
 import type { AiConfigurationUpdate } from '../ai/contracts';
 import { aiFailure, DEFAULT_AI_STATUS } from '../ai/shared';
+import { invokeRegisteredAiTool, registeredAiToolDefinitions } from '../ai/tools';
 
 const state = reactive({ status: { ...DEFAULT_AI_STATUS }, available: Boolean(window.aiHost), loading: false });
 let subscription: Disposable | undefined;
@@ -40,7 +41,21 @@ export const useAiService = () => ({
     if (result.ok === true) state.status = result.value;
     return result;
   },
-  chat: (request: AiChatRequest): Promise<AiResult<AiCompletion>> => invoke(() => window.aiHost!.chat('builtin-chat', request)),
+  async chat(request: AiChatRequest): Promise<AiResult<AiCompletion>> {
+    // 工具在渲染器执行，因而只能操作自己已获授权的插件状态；主进程只处理模型与密钥。
+    let messages = [...request.messages];
+    const tools = request.tools ?? registeredAiToolDefinitions();
+    for (let round = 0; round < 8; round += 1) {
+      const result = await invoke(() => window.aiHost!.chat('builtin-chat', { ...request, messages, ...(tools.length ? { tools } : {}) }));
+      if (result.ok === false || !result.value.toolCalls?.length) return result;
+      messages.push({ role: 'assistant', content: result.value.content, toolCalls: result.value.toolCalls });
+      for (const call of result.value.toolCalls) {
+        try { messages.push({ role: 'tool', toolCallId: call.id, content: JSON.stringify(await invokeRegisteredAiTool(call)) }); }
+        catch (error) { messages.push({ role: 'tool', toolCallId: call.id, content: JSON.stringify({ error: error instanceof Error ? error.message : '工具调用失败' }) }); }
+      }
+    }
+    return aiFailure('BUSY', 'AI 工具调用轮次过多，已停止执行。', true);
+  },
   test: (requestId: string): Promise<AiResult<AiCompletion>> => invoke(() => window.aiHost!.test('settings', requestId)),
   async cancel(owner: 'builtin-chat' | 'settings', requestId: string) {
     try { return await window.aiHost?.cancel(owner, requestId) ?? false; } catch { return false; }

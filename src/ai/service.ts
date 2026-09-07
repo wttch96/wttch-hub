@@ -5,6 +5,7 @@
 import type { AiChatRequest, AiCompletion, AiResult, AiStatus, AiError, AiMessage } from '@wttch-hub/plugin-api';
 import { defaultConfiguration, validateConfiguration, type StoredAiConfiguration } from './config';
 import { aiFailure, isRecord } from './shared';
+import { ChatOpenAI } from '@langchain/openai';
 
 /** 通过依赖注入分离 Electron 密钥存储与网络，回归测试无需真实密钥或付费请求。 */
 export interface AiServiceDependencies {
@@ -23,10 +24,16 @@ export const buildChatBody = (input: unknown, config: StoredAiConfiguration): Re
   }
   let total = 0;
   const messages: AiMessage[] = input.messages.map((message) => {
-    if (!isRecord(message) || typeof message.role !== 'string' || !['system', 'user', 'assistant'].includes(String(message.role))
-      || typeof message.content !== 'string' || !message.content.trim()) throw new Error('消息角色或内容无效。');
+    if (!isRecord(message) || typeof message.role !== 'string' || !['system', 'user', 'assistant', 'tool'].includes(String(message.role))
+      || typeof message.content !== 'string'
+      // OpenAI 的工具调用 assistant 消息可以只有 tool_calls、没有可见文本。
+      || (!message.content.trim() && !(message.role === 'assistant' && Array.isArray(message.toolCalls) && message.toolCalls.length))) throw new Error('消息角色或内容无效。');
+    if (message.role === 'tool' && (typeof message.toolCallId !== 'string' || !message.toolCallId)) throw new Error('工具结果缺少调用 ID。');
+    if (message.role === 'assistant' && message.toolCalls !== undefined && (!Array.isArray(message.toolCalls) || message.toolCalls.some(call => !isRecord(call) || typeof call.id !== 'string' || typeof call.name !== 'string' || !isRecord(call.args)))) throw new Error('工具调用记录无效。');
     total += message.content.length;
-    return { role: message.role as AiMessage['role'], content: message.content };
+    return { role: message.role as AiMessage['role'], content: message.content,
+      ...(typeof message.toolCallId === 'string' ? { toolCallId: message.toolCallId } : {}),
+      ...(Array.isArray(message.toolCalls) ? { toolCalls: message.toolCalls as AiMessage['toolCalls'] } : {}) };
   });
   if (input.systemPrompt !== undefined) {
     if (typeof input.systemPrompt !== 'string') throw new Error('系统提示词必须是文本。');
@@ -51,6 +58,12 @@ export const buildChatBody = (input: unknown, config: StoredAiConfiguration): Re
     body.response_format = { type: input.responseFormat };
   }
   if (input.thinking !== undefined && typeof input.thinking !== 'boolean') throw new Error('thinking 必须是布尔值。');
+  if (input.tools !== undefined) {
+    if (!Array.isArray(input.tools) || input.tools.length > 32 || input.tools.some((tool) => !isRecord(tool)
+      || typeof tool.name !== 'string' || !/^[a-z][a-z0-9_]{1,63}$/.test(tool.name)
+      || typeof tool.description !== 'string' || !isRecord(tool.parameters))) throw new Error('AI 工具声明无效。');
+    body.tools = input.tools.map((tool) => ({ type: 'function', function: tool }));
+  }
   if (config.provider === 'deepseek') body.thinking = { type: input.thinking === true ? 'enabled' : 'disabled' };
   return body;
 };
@@ -163,39 +176,29 @@ export const createAiService = (dependencies: AiServiceDependencies) => {
       return result;
     };
     try {
-      const response = await dependencies.fetch(`${config.baseUrl}/chat/completions`, {
-        method: 'POST', redirect: 'error', signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok) { await response.body?.cancel(); return remember(httpError(response.status)); }
-      // 设置响应体上限，防止错误端点无限返回内容占满主进程内存。
-      const reader = response.body?.getReader();
-      if (!reader) return remember(aiFailure('INVALID_RESPONSE', 'AI 服务返回了空响应。'));
-      const decoder = new TextDecoder();
-      let raw = '';
-      let bytes = 0;
-      while (!controller.signal.aborted) {
-        const chunk = await reader.read();
-        if (chunk.done) break;
-        bytes += chunk.value.byteLength;
-        if (bytes > 4 * 1024 * 1024) { await reader.cancel(); return remember(aiFailure('INVALID_RESPONSE', 'AI 响应超过 4 MB，请缩短输出。')); }
-        raw += decoder.decode(chunk.value, { stream: true });
-      }
-      raw += decoder.decode();
+      // LangChain 负责 OpenAI-compatible 编码、工具声明与响应解析；密钥仍只留在主进程。
+      const model = new ChatOpenAI({ model: String(body.model), apiKey: secret, temperature: body.temperature as number | undefined,
+        maxTokens: body.max_tokens as number | undefined, timeout: config.timeoutMs,
+        configuration: { baseURL: config.baseUrl, fetch: dependencies.fetch as typeof globalThis.fetch } });
+      const runnable = Array.isArray(body.tools) ? model.bindTools(body.tools as never) : model;
+      const messages = (body.messages as AiMessage[]).map((message) => message.role === 'tool'
+        ? { role: 'tool', content: message.content, tool_call_id: message.toolCallId }
+        : message.role === 'assistant' && message.toolCalls?.length
+          ? { role: 'assistant', content: message.content, tool_calls: message.toolCalls.map((call) => ({ id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.args) } })) }
+          : { role: message.role, content: message.content });
+      const response = await runnable.invoke(messages as never, { signal: controller.signal });
       if (controller.signal.aborted) return remember(aiFailure(timedOut ? 'TIMEOUT' : 'CANCELLED', timedOut ? 'AI 请求超时，请稍后重试。' : '请求已停止。', timedOut));
-      let data: unknown;
-      try { data = JSON.parse(raw); } catch { return remember(aiFailure('INVALID_RESPONSE', '服务响应不是有效 JSON，请检查接口地址。')); }
-      const choice = isRecord(data) && Array.isArray(data.choices) ? data.choices[0] : undefined;
-      if (!isRecord(choice) || !isRecord(choice.message) || typeof choice.message.content !== 'string' || !choice.message.content.trim()) {
-        return remember(aiFailure('INVALID_RESPONSE', '服务未返回有效文本，请检查模型或增加输出上限。'));
-      }
-      const usage = isRecord(data) && isRecord(data.usage) ? data.usage : undefined;
-      const validUsage = usage && ['prompt_tokens', 'completion_tokens', 'total_tokens'].every((field) => typeof usage[field] === 'number' && Number.isFinite(usage[field]) && (usage[field] as number) >= 0);
+      const content = typeof response.content === 'string' ? response.content : JSON.stringify(response.content ?? '');
+      const toolCalls = Array.isArray(response.tool_calls) ? response.tool_calls
+        .filter((call) => typeof call.name === 'string' && isRecord(call.args))
+        .map((call) => ({ id: call.id ?? crypto.randomUUID(), name: call.name, args: call.args })) : [];
+      if (!content.trim() && !toolCalls.length) return remember(aiFailure('INVALID_RESPONSE', '服务未返回有效文本或工具调用。'));
+      const usage = isRecord(response.usage_metadata) ? response.usage_metadata : undefined;
+      const validUsage = usage && ['input_tokens', 'output_tokens', 'total_tokens'].every((field) => typeof usage[field] === 'number' && Number.isFinite(usage[field]) && (usage[field] as number) >= 0);
       return remember({ ok: true, value: {
-        requestId: id, content: choice.message.content, model: isRecord(data) && typeof data.model === 'string' ? data.model : String(body.model),
-        finishReason: typeof choice.finish_reason === 'string' ? choice.finish_reason : 'unknown',
-        ...(validUsage ? { usage: { promptTokens: usage.prompt_tokens as number, completionTokens: usage.completion_tokens as number, totalTokens: usage.total_tokens as number } } : {}),
+        requestId: id, content, model: String(body.model), finishReason: 'unknown',
+        ...(validUsage ? { usage: { promptTokens: usage.input_tokens as number, completionTokens: usage.output_tokens as number, totalTokens: usage.total_tokens as number } } : {}),
+        ...(toolCalls.length ? { toolCalls } : {}),
       } });
     } catch {
       // 不传播底层异常文本：URL、服务响应或第三方库异常可能包含密钥和请求正文。
