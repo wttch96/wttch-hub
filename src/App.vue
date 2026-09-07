@@ -47,7 +47,17 @@ const macOS = controls?.platform === 'darwin';
 const isMaximized = ref(false);
 let unsubscribe: (() => void) | undefined;
 let releaseRoutePlugin: (() => Promise<void>) | undefined;
-let routeActivation = 0;
+let backgroundInitialization: ReturnType<typeof setTimeout> | undefined;
+
+const initializeInBackground = () => {
+  // The shell and router are already usable. Plugin startup can involve IPC,
+  // persisted-state work and timers, so it must never hold up first paint.
+  backgroundInitialization = setTimeout(() => {
+    void pluginRuntime.initialize().catch((error) => {
+      console.error('[plugins] background initialization failed:', error);
+    });
+  }, 0);
+};
 
 onMounted(async () => {
   if (isFloatingWindow.value) {
@@ -61,20 +71,25 @@ onMounted(async () => {
   unsubscribe = controls?.onMaximizedChange((maximized) => {
     isMaximized.value = maximized;
   });
-  await pluginRuntime.initialize();
+  initializeInBackground();
 });
 
-watch(() => route.meta?.pluginId as string | undefined, async (pluginId) => {
+watch(() => route.meta?.pluginId as string | undefined, async (pluginId, _previous, onCleanup) => {
   if (isFloatingWindow.value) return;
-  const activation = ++routeActivation;
-  await releaseRoutePlugin?.();
+  // Rapid navigation used to queue an acquire/release pair for every
+  // intermediate route. Cancel work that no longer belongs to the active view.
+  let cancelled = false;
+  onCleanup(() => { cancelled = true; });
+  const releasePrevious = releaseRoutePlugin;
   releaseRoutePlugin = undefined;
-  if (!pluginId) return;
+  await releasePrevious?.();
+  if (cancelled || !pluginId) return;
   const acquired = await pluginRuntime.acquire(pluginId, 'route', route.fullPath);
-  if (activation !== routeActivation) await acquired(); else releaseRoutePlugin = acquired;
+  if (cancelled) await acquired(); else releaseRoutePlugin = acquired;
 }, { immediate: true });
 
 onBeforeUnmount(() => {
+  clearTimeout(backgroundInitialization);
   unsubscribe?.();
   void releaseRoutePlugin?.();
   void pluginRuntime.shutdown();

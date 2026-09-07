@@ -29,7 +29,7 @@ for (const primary of [false, true]) test(`主进程单实例与关闭行为：�
     constructor() { created++; }
     on(name: string, cb: (event?: unknown) => void) { windowEvents.set(name, cb); }
     once() { /* 首帧事件由 Electron 触发，本测试只验证生命周期入口。 */ }
-    loadFile() { /* 不加载真实页面。 */ }
+    loadFile() { return Promise.resolve(); /* 不加载真实页面。 */ }
     isDestroyed() { return false; }
     isMinimized() { return true; }
     restore() { restored++; }

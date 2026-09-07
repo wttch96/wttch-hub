@@ -10,9 +10,18 @@ import type { SystemStats } from '@wttch-hub/plugin-api';
 const props = withDefaults(defineProps<{ refreshIntervalMs?: number }>(), { refreshIntervalMs: 2000 });
 const stats = ref<SystemStats>({ cpu: 0, memory: 0, gpu: 0, readBytes: 0, writeBytes: 0, downloadBytes: 0, uploadBytes: 0 });
 let timer: ReturnType<typeof setInterval> | undefined;
+let refreshing = false;
 const refresh = async () => {
-  const next = await window.toolHost?.systemStats();
-  if (next) stats.value = next;
+  if (refreshing) return;
+  refreshing = true;
+  try {
+    const next = await window.toolHost?.systemStats();
+    if (next) stats.value = next;
+  } catch {
+    // System counters are optional on restricted Windows installations.
+  } finally {
+    refreshing = false;
+  }
 };
 const startSampling = () => {
   clearInterval(timer);

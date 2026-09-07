@@ -11,6 +11,12 @@ import { restoreEntries, validateBackup } from './data/backup';
 import './config/labs-styles.css';
 import './index.css';
 
+// Apply this before mounting Vue, so software-rendered systems never paint a
+// costly glass/animation frame first.
+if (window.windowControls?.softwareRendering) {
+  document.documentElement.classList.add('software-rendering');
+}
+
 // 必须在动态加载插件 runtime 之前恢复数据，否则模块初始化会先读到旧快照。
 async function bootstrap() {
   if (window.desktopHost && !location.hash.startsWith('#/floating/')) {

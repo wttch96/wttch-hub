@@ -14,6 +14,8 @@ import type { AiStatus, FloatingWidgetWindowOptions, PluginNotification } from '
 const windowControls = {
   /** Host platform, so the page can decide whether to draw custom chrome. */
   platform: process.platform as NodeJS.Platform,
+  /** Use a reduced-effects UI when Chromium is intentionally software-rendered. */
+  softwareRendering: process.env.WTTCH_DISABLE_HARDWARE_ACCELERATION === '1',
 
   minimize: () => ipcRenderer.send('win:minimize'),
   toggleMaximize: () => ipcRenderer.send('win:toggle-maximize'),

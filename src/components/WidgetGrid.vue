@@ -3,7 +3,7 @@
 -->
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Grip, Pin, PinOff, Plus, RotateCcw, X } from 'lucide-vue-next';
 import { pluginRuntime } from '../plugins/runtime';
 import PluginWidgetHost from './PluginWidgetHost.vue';
@@ -25,8 +25,10 @@ const active = ref<{ id: string; mode: 'drag' | 'resize'; startX: number; startY
 const grid = ref<HTMLElement>();
 const storageKey = 'wttch-hub:home-widgets';
 const showLibrary = ref(false);
+const widgetsReady = ref(false);
 const cellWidth = 88;
 const cellHeight = 66;
+let deferredWidgets: ReturnType<typeof setTimeout> | undefined;
 
 const pluginFor = (id: string) => widgetPlugins.value.find((plugin) => plugin.id === id);
 const minSizeFor = (id: string) => {
@@ -116,7 +118,11 @@ onMounted(() => {
         .map(normalizeItem);
     }
   } catch { /* Ignore an invalid local layout. */ }
+  // Let the shell and its first meaningful paint settle before async widget
+  // chunks, timers and IPC sampling begin.
+  deferredWidgets = setTimeout(() => { widgetsReady.value = true; }, 400);
 });
+onBeforeUnmount(() => clearTimeout(deferredWidgets));
 </script>
 
 <template>
@@ -128,7 +134,7 @@ onMounted(() => {
         <button class="reset" type="button" title="恢复默认布局" @click="reset"><RotateCcw :size="14" /> 重置</button>
       </div>
     </div>
-    <div v-if="showLibrary" class="library card">
+    <div v-if="widgetsReady && showLibrary" class="library card">
       <button v-for="plugin in availablePlugins" :key="plugin.id" type="button" class="library-item" @click="addWidget(plugin.id)">
         <component :is="plugin.icon" :size="16" :style="{ color: plugin.tint[0] }" />
         <span>{{ plugin.name }}</span>
@@ -137,6 +143,7 @@ onMounted(() => {
       <span v-if="!availablePlugins.length" class="empty">所有 Widget 已添加</span>
     </div>
     <div
+      v-if="widgetsReady"
       ref="grid"
       class="widget-grid"
       :style="gridStyle"

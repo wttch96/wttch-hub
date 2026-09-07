@@ -17,6 +17,8 @@ declare module '*.vue' {
 interface WindowControlsApi {
   /** Host platform, so the page can decide whether to draw custom chrome. */
   platform: string;
+  /** Whether Chromium runs with hardware acceleration disabled. */
+  softwareRendering: boolean;
   minimize(): void;
   toggleMaximize(): void;
   close(): void;

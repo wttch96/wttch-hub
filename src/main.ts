@@ -121,6 +121,14 @@ if (!app.isPackaged && process.env.WTTCH_DISABLE_SANDBOX === '1') {
 // title bar so the whole top area shares the same translucent material.
 const CUSTOM_CHROME = process.platform === 'win32';
 const MACOS_CHROME = process.platform === 'darwin';
+// Forge's Vite plugin injects this global while serving the dev renderer. A
+// stale build environment can leave that URL embedded in a package, so never
+// trust it once this executable is packaged.
+const devServerUrl = app.isPackaged
+  ? undefined
+  // Vite can bind to IPv6 `::1` while Electron resolves `localhost` to IPv4
+  // on Windows. Always use the IPv4 loopback address for the desktop client.
+  : MAIN_WINDOW_VITE_DEV_SERVER_URL?.replace('://localhost:', '://127.0.0.1:');
 
 // Renderer <-> main messages for the custom window controls.
 const IPC = {
@@ -209,7 +217,7 @@ ipcMain.handle(IPC.floatingOpen, async (_event, pluginId: unknown, options: Floa
     // `ready-to-show` is not guaranteed for every transparent frameless
     // window. Waiting for the document and explicitly showing the window makes
     // the IPC result match what the user actually sees.
-    if (MAIN_WINDOW_VITE_DEV_SERVER_URL) await floatingWindow.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}#${hash}`);
+    if (devServerUrl) await floatingWindow.loadURL(`${devServerUrl}#${hash}`);
     else await floatingWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), { hash });
     if (floatingWindow.isDestroyed()) return false;
     floatingWindow.show();
@@ -270,26 +278,58 @@ ipcMain.handle(IPC.pluginRemove, (_event, file: string) => {
   return loadPluginPackages();
 });
 
-ipcMain.handle(IPC.systemStats, async () => {
+type SystemStatsSnapshot = {
+  cpu: number;
+  gpu: number;
+  memory: number;
+  readBytes: number;
+  writeBytes: number;
+  downloadBytes: number;
+  uploadBytes: number;
+};
+let systemStatsCache: { value: SystemStatsSnapshot; capturedAt: number } | undefined;
+let systemStatsRefresh: Promise<SystemStatsSnapshot> | undefined;
+const collectSystemStats = async (): Promise<SystemStatsSnapshot> => {
+  // On software-rendered/restricted Windows hosts, disk and network counter
+  // enumeration is both slow and unreliable. Keep the lightweight CPU/memory
+  // figures, but do not let optional telemetry stall page navigation.
+  const lightweightSampling = disableHardwareAcceleration;
   const [load, memory, io, networkInterface] = await Promise.all([
     si.currentLoad(),
     si.mem(),
-    si.disksIO(),
-    si.networkInterfaceDefault(),
+    lightweightSampling ? Promise.resolve(undefined) : si.disksIO(),
+    lightweightSampling ? Promise.resolve(undefined) : si.networkInterfaceDefault(),
   ]);
-  const graphics = await si.graphics();
+  // `si.graphics()` is comparatively expensive on software-rendered Windows
+  // machines, and cannot report a useful utilization value without a GPU.
+  const graphics = disableHardwareAcceleration ? undefined : await si.graphics();
   const network = networkInterface ? await si.networkStats(networkInterface) : [];
   const networkStats = network[0];
   return {
     cpu: load.currentLoad,
-    gpu: graphics.controllers.reduce((total, controller) => total + (controller.utilizationGpu ?? 0), 0) /
-      Math.max(1, graphics.controllers.length),
+    gpu: graphics
+      ? graphics.controllers.reduce((total, controller) => total + (controller.utilizationGpu ?? 0), 0) /
+        Math.max(1, graphics.controllers.length)
+      : 0,
     memory: memory.used / memory.total * 100,
-    readBytes: io.rIO_sec,
-    writeBytes: io.wIO_sec,
+    readBytes: io?.rIO_sec ?? 0,
+    writeBytes: io?.wIO_sec ?? 0,
     downloadBytes: networkStats?.rx_sec ?? 0,
     uploadBytes: networkStats?.tx_sec ?? 0,
   };
+};
+ipcMain.handle(IPC.systemStats, async () => {
+  const now = Date.now();
+  if (systemStatsCache && now - systemStatsCache.capturedAt < 1500) return systemStatsCache.value;
+  if (!systemStatsRefresh) {
+    systemStatsRefresh = collectSystemStats()
+      .then((value) => {
+        systemStatsCache = { value, capturedAt: Date.now() };
+        return value;
+      })
+      .finally(() => { systemStatsRefresh = undefined; });
+  }
+  return systemStatsRefresh;
 });
 
 if (CUSTOM_CHROME || MACOS_CHROME) {
@@ -375,6 +415,9 @@ const createWindow = () => {
     minWidth: 600,
     minHeight: 420,
     frame: !CUSTOM_CHROME,
+    // Windows and macOS draw the custom rounded shell over a transparent
+    // native surface. Software-rendering mode still removes costly blur and
+    // animation inside the renderer.
     transparent: CUSTOM_CHROME || MACOS_CHROME,
     backgroundColor: CUSTOM_CHROME ? '#00000000' : undefined,
     ...(process.platform === 'darwin'
@@ -422,23 +465,45 @@ const createWindow = () => {
     mainWindow.on('unmaximize', reportMaximized);
   }
 
-  // Wait for first paint before showing so there is no white / blank flash.
-  mainWindow.once('ready-to-show', () => {
+  // `ready-to-show` may never arrive for a transparent frameless window on
+  // some Windows GPU/compositor combinations. Do not let that leave a fully
+  // running app (including tray and taskbar entries) permanently invisible:
+  // loading completion is a reliable fallback.
+  let shownInitially = false;
+  const showInitially = () => {
+    if (shownInitially || mainWindow.isDestroyed()) return;
+    shownInitially = true;
     mainWindow.show();
-  });
+  };
+  mainWindow.once('ready-to-show', showInitially);
 
   // and load the index.html of the app.
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-  } else {
-    mainWindow.loadFile(
+  const loadMainPage = () => devServerUrl
+    ? mainWindow.loadURL(devServerUrl)
+    : mainWindow.loadFile(
       path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
     );
-  }
+  const loadWithRetry = async (attempt = 0): Promise<void> => {
+    try {
+      await loadMainPage();
+      showInitially();
+    } catch (error) {
+      // Forge starts the Vite child process during debugging. On Windows the
+      // Electron process can occasionally race it by a few hundred ms.
+      if (devServerUrl && attempt < 20) {
+        setTimeout(() => { void loadWithRetry(attempt + 1); }, 250);
+        return;
+      }
+      console.error('[window] failed to load main page:', error);
+      // Keep the native error page reachable instead of a forever-hidden app.
+      showInitially();
+    }
+  };
+  void loadWithRetry();
 
   // Open DevTools automatically during development (detached, so it does not
   // reshape the custom window); in packaged builds use the status bar button.
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+  if (devServerUrl) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 
@@ -529,6 +594,7 @@ const createWindow = () => {
 /** 托盘、Dock 共用恢复入口：最小化先还原，隐藏则显示，关闭后重新创建。 */
 const showWorkbench = () => {
   const window = createWindow();
+
   if (window.isMinimized()) window.restore();
   window.show();
   window.focus();
@@ -541,7 +607,7 @@ app.on('ready', () => {
   if (!primaryInstance || quitting) return;
   preferences = createPreferences(app.getPath('userData'));
   // 只允许本应用文档访问 AI；开发时匹配 Vite origin 与入口路径，打包时匹配精确文件 URL。
-  const rendererUrl = MAIN_WINDOW_VITE_DEV_SERVER_URL
+  const rendererUrl = devServerUrl
     || pathToFileURL(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)).href;
   const isAppUrl = (input: string) => {
     try {

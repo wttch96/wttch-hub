@@ -66,6 +66,33 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Software rasterization makes backdrop filters and long transitions costly.
+   The class is set by preload only when hardware acceleration is disabled. */
+html.software-rendering {
+  --theme-window-bg: #f2f2f3;
+  --theme-content-bg: #f2f2f3;
+  --theme-sidebar-bg: #e7e7ea;
+  --theme-card-bg: #ffffff;
+  --theme-titlebar-bg: #f2f2f3;
+}
+html.software-rendering .titlebar,
+html.software-rendering .content,
+html.software-rendering .sheet,
+html.software-rendering .toast,
+html.software-rendering .labs-shell,
+html.software-rendering .labs-hero {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html.software-rendering *,
+html.software-rendering *::before,
+html.software-rendering *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
 /* Slim, macOS-style overlay scrollbars. */
 ::-webkit-scrollbar {
   width: 10px;
