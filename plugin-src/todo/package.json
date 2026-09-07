@@ -1,8 +1,8 @@
 {
   "name": "@wttch-hub/plugin-todo",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
-  "description": "wttch-hub Todo 泳道看板插件。",
+  "description": "支持 Markdown 正文的 wttch-hub Todo 泳道看板插件。",
   "dependencies": { "@wttch-hub/plugin-api": "1.0.0" },
   "peerDependencies": { "vue": "^3.5.0", "lucide-vue-next": "^1.0.0" },
   "scripts": {

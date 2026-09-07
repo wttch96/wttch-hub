@@ -16,7 +16,7 @@ export type TodoLane = {
 export type TodoItem = {
   id: string;
   title: string;
-  notes: string;
+  body: string;
   dueAt?: string;
   priority: TodoPriority;
   completed: boolean;
@@ -61,7 +61,11 @@ const validItems = (value: unknown, lanes: TodoLane[]): TodoItem[] => {
       return {
         id: item.id,
         title: item.title,
-        notes: typeof item.notes === 'string' ? item.notes : '',
+        // `notes` was used before Markdown bodies were introduced. Read it as
+        // a migration fallback and only persist the new `body` field.
+        body: typeof item.body === 'string' ? item.body : (typeof (item as TodoItem & { notes?: string }).notes === 'string'
+          ? (item as TodoItem & { notes: string }).notes
+          : ''),
         dueAt: typeof item.dueAt === 'string' && item.dueAt ? item.dueAt : undefined,
         priority: ['low', 'normal', 'high'].includes(item.priority) ? item.priority : 'normal',
         completed: lane?.completed ?? completed,
@@ -132,16 +136,28 @@ export const removeLane = (id: string) => {
   persistLanes(); persistItems();
   return true;
 };
-export const addTodo = (input: { title: string; notes?: string; dueAt?: string; priority?: TodoPriority; laneId?: string }) => {
+export const addTodo = (input: { title: string; body?: string; dueAt?: string; priority?: TodoPriority; laneId?: string }) => {
   const title = input.title.trim();
   const lane = laneFor(input.laneId);
   if (!title || !lane) return false;
   const order = state.items.filter((item) => item.laneId === lane.id).length;
   state.items.push({
-    id: makeId(), title, notes: input.notes?.trim() ?? '', dueAt: input.dueAt || undefined,
+    id: makeId(), title, body: input.body?.trim() ?? '', dueAt: input.dueAt || undefined,
     priority: input.priority ?? 'normal', completed: lane.completed, laneId: lane.id, order,
     createdAt: new Date().toISOString(), completedAt: lane.completed ? new Date().toISOString() : undefined,
   });
+  persistItems();
+  return true;
+};
+export const updateTodo = (id: string, input: { title?: string; body?: string }) => {
+  const item = state.items.find((entry) => entry.id === id);
+  if (!item) return false;
+  if (input.title !== undefined) {
+    const title = input.title.trim();
+    if (!title) return false;
+    item.title = title;
+  }
+  if (input.body !== undefined) item.body = input.body;
   persistItems();
   return true;
 };

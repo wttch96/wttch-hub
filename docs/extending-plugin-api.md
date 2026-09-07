@@ -6,7 +6,7 @@
 
 ## 1. 先设计最小公开契约
 
-在 [packages/plugin-api/src/index.ts](../packages/plugin-api/src/index.ts) 中为新能力增加：
+在 [packages/plugin-api/src/index.d.ts](../packages/plugin-api/src/index.d.ts) 中为新能力增加：
 
 1. 输入、输出和可判断错误类型。
 2. 面向插件的接口，例如 `PluginClipboardApi`。

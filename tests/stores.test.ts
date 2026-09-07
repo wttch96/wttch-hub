@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { PluginComponentApi, PluginStorageApi } from '../src/types/plugin';
 import { addAlarm, alarmState, startAlarmScheduler } from '../plugin-src/alarm/store';
-import { connectTodoStore, disconnectTodoStore, todoState } from '../plugin-src/todo/store';
+import { connectTodoStore, disconnectTodoStore, todoState, updateTodo } from '../plugin-src/todo/store';
 
 /** 模拟宿主存储，保留真实订阅广播行为；直接改 data 模拟插件卸载期间的外部写入。 */
 const createHost = () => {
@@ -43,9 +43,12 @@ test('待办重连读取卸载期间写入的数据，页面重复连接共用�
   connectTodoStore(host.api);
   assert.equal(host.listeners.size, 1);
   disconnectTodoStore();
-  host.data.items = [{ id: 'external', title: '外部任务', laneId: 'todo' }];
+  host.data.items = [{ id: 'external', title: '外部任务', laneId: 'todo', notes: '**旧正文**' }];
   connectTodoStore(host.api);
   assert.equal(todoState.items[0]?.title, '外部任务');
+  assert.equal(todoState.items[0]?.body, '**旧正文**');
+  assert.equal(updateTodo('external', { body: '# Markdown 正文' }), true);
+  assert.equal((host.data.items as Array<{ body: string }>)[0]?.body, '# Markdown 正文');
   disconnectTodoStore();
   assert.equal(host.listeners.size, 0);
 });

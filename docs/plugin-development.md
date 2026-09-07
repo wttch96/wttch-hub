@@ -31,7 +31,7 @@ npm --prefix plugin-src/alarm test
 
 ## 公共 API 与测试
 
-插件只从 `@wttch-hub/plugin-api` 导入 `defineToolPlugin`、`definePluginPackage` 和类型。API 真源是 `packages/plugin-api/src/index.ts`；根目录与各插件通过 npm workspace 在 `node_modules` 中解析该包。插件不得直接使用 Electron IPC；宿主按能力声明提供 AI、存储、数据快照、服务分发、通知、系统状态和 UI 接口。
+插件只从 `@wttch-hub/plugin-api` 导入 `defineToolPlugin`、`definePluginPackage` 和类型。API 真源是 `packages/plugin-api/src/index.d.ts`；根目录与各插件通过 npm workspace 在 `node_modules` 中解析该包。插件不得直接使用 Electron IPC；宿主按能力声明提供 AI、存储、数据快照、服务分发、通知、系统状态和 UI 接口。
 
 根目录 `package.json` 的 `workspaces` 定义了 `packages/*` 和 `plugin-src/*`。运行 `npm run install:packages` 会离线重建工作区链接；`npm run build:packages` 与 `npm run test:packages` 会遍历全部包。每个包都具有 `npm pack` 可消费的 `main`、`types`、版本和依赖声明，开发时不使用相对目录依赖。
 

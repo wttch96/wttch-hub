@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-type TargetType = 'INTEGER' | 'BOOL' | 'FLOAT'
+type TargetType = 'INTEGER' | 'FLOAT'
 type IntegerEncoding = 'UNSIGNED' | 'SIGN_MAGNITUDE' | 'TWOS_COMPLEMENT'
 
 const hexInput = ref('A0B1C2D3')
@@ -21,7 +21,6 @@ const types = computed<Array<{ value: TargetType; label: string }>>(() => [
   { value: 'INTEGER', label: '16 → 10 整数转换' },
   ...(inputBitLength.value === 32 ? [{ value: 'FLOAT' as const, label: 'IEEE 754 binary32（float）' }] : []),
   ...(inputBitLength.value === 64 ? [{ value: 'FLOAT' as const, label: 'IEEE 754 binary64（double）' }] : []),
-  { value: 'BOOL', label: '布尔值 bool' },
 ])
 watch(supportsIeeeFloat, (supported) => {
   if (!supported && targetType.value === 'FLOAT') targetType.value = 'INTEGER'
@@ -160,10 +159,7 @@ function parse() {
   }]
 
   // ── ⑥ final value ──
-  const u = uintFromBits(ordered)
-  if (targetType.value === 'BOOL') {
-    finalType.value = 'bool'; finalVal.value = u !== 0n ? 'True' : 'False'
-  } else if (targetType.value === 'INTEGER') {
+  if (targetType.value === 'INTEGER') {
     integerDetails.value = buildIntegerDetails(ordered)
     const selected = integerDetails.value.find((item) => item.mode === integerEncoding.value)!
     finalType.value = integerTypeName(ordered.length, integerEncoding.value)
@@ -297,11 +293,6 @@ function applyPreset(p: typeof presets[number]) {
           </div>
           <div class="bp-formula"><span>计算</span><code>{{ floatDetail.formula }}</code></div>
         </div>
-      </div>
-
-      <div v-else-if="targetType === 'BOOL'" class="bp-step bp-step--interpret">
-        <div class="bp-step-hd"><span class="bp-num bg-orange">③</span> 布尔解释</div>
-        <div class="bp-step-bd"><div class="bp-formula"><span>规则</span><code>无符号值 {{ uintFromBits(interpretedBits) }} {{ finalVal === 'False' ? '= 0 → False' : '≠ 0 → True' }}</code></div></div>
       </div>
 
       <!-- ④ Final -->

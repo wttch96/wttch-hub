@@ -4,7 +4,7 @@
 
 这里是可独立发布的 `wttch-hub-plugin-api` 工作区包。它对插件作者公开插件清单、生命周期、AI、存储、数据管理和服务分发的类型，以及 `defineToolPlugin`、`definePluginPackage` 两个定义函数。
 
-唯一 API 源文件是 `src/index.ts`。根项目与插件通过 npm workspace 在 `node_modules/@wttch-hub/plugin-api` 链接本包；运行 `npm run install:packages` 可重建链接，运行 `npm --workspace @wttch-hub/plugin-api run build` 或 `npm pack` 可独立验证和打包。
+唯一 API 声明文件是 `src/index.d.ts`。根项目与插件通过 npm workspace 在 `node_modules/@wttch-hub/plugin-api` 链接本包；运行 `npm run install:packages` 可重建链接，运行 `npm --workspace @wttch-hub/plugin-api run build` 或 `npm pack` 可独立验证和打包。`src/index.js` 只保留 `defineToolPlugin`、`definePluginPackage` 和稳定常量的极小运行时实现。
 
 插件应始终从包名导入，不能从宿主的 `src/` 目录导入：
 

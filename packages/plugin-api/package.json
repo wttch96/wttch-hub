@@ -2,11 +2,12 @@
   "name": "@wttch-hub/plugin-api",
   "version": "1.0.0",
   "description": "wttch-hub 插件公开 API。",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
   "files": ["src"],
   "scripts": {
-    "build": "tsc --noEmit --target esnext --skipLibCheck --module esnext --moduleResolution node --allowImportingTsExtensions src/index.ts",
+    "build": "tsc --noEmit --target esnext --skipLibCheck --module esnext --moduleResolution node --allowImportingTsExtensions src/index.d.ts",
     "test": "node --import tsx --test ../../tests/plugin-debug.test.ts",
     "pack:local": "npm pack"
   },
