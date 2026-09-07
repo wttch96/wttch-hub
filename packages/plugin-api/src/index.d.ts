@@ -116,6 +116,37 @@ export interface PluginUiApi {
   closeSheet(): void;
 }
 
+/** 插件调试日志的等级；仅用于开发诊断，不应承载业务数据或密钥。 */
+export type PluginDebugLevel = 'debug' | 'info' | 'warn' | 'error';
+/** 一条可由 Electron 主进程或测试宿主消费的结构化调试记录。 */
+export type PluginDebugEntry = {
+  pluginId: string;
+  level: PluginDebugLevel;
+  message: string;
+  data?: unknown;
+  timestamp: string;
+};
+/**
+ * 宿主提供的最小调试能力。
+ * Electron 中会转发到主进程日志；内存调试宿主会记录到 events.logs。
+ */
+export interface PluginDebugApi {
+  log(level: PluginDebugLevel, message: string, data?: unknown): void;
+  debug(message: string, data?: unknown): void;
+  info(message: string, data?: unknown): void;
+  warn(message: string, data?: unknown): void;
+  error(message: string, data?: unknown): void;
+}
+
+/**
+ * 插件间扩展注册表。扩展对象只存在于当前渲染器进程，不能用来交换密钥或跨进程数据。
+ * 提供者应在 load 中 registerExtension，并在 unload 时由宿主自动撤销。
+ */
+export interface PluginExtensionsApi {
+  registerExtension<T extends object>(extension: T): Disposable;
+  getExtension<T extends object>(pluginId: string): T | undefined;
+}
+
 /** AI 的可诊断错误码；插件应按 code 分支处理，不依赖服务商的英文错误文本。 */
 export type AiErrorCode = 'NOT_CONFIGURED' | 'DISABLED' | 'FORBIDDEN' | 'INVALID_REQUEST'
   | 'AUTH' | 'RATE_LIMIT' | 'TIMEOUT' | 'CANCELLED' | 'NETWORK' | 'PROVIDER'
@@ -185,6 +216,8 @@ export interface PluginComponentApi {
   data: PluginDataApi;
   services: PluginServicesApi;
   ui: PluginUiApi;
+  debug: PluginDebugApi;
+  extensions: PluginExtensionsApi;
 }
 
 /** Vue provide/inject 使用的稳定键。 */
@@ -203,6 +236,8 @@ export interface PluginActivationContext {
   data: PluginDataApi;
   services: PluginServicesApi;
   ui: PluginUiApi;
+  debug: PluginDebugApi;
+  extensions: PluginExtensionsApi;
 }
 
 export type PluginLifecycleContext = Omit<PluginActivationContext, 'reason'> & {

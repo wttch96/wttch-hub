@@ -5,6 +5,7 @@
 import { Palette } from 'lucide-vue-next';
 import { defineToolPlugin, type PluginSettingsApi } from '@wttch-hub/plugin-api';
 import { applyTheme, paletteFromSettings, resetTheme, themePresets } from './theme';
+import { createThemeExtension } from './extension';
 
 const colorFields = [
   ['accentColor', '主题色', '#0A84FF'],
@@ -31,6 +32,18 @@ const paletteSettingKeys = {
   warningColor: 'warning',
   dangerColor: 'danger',
 } as const;
+const defaultThemeColors = [
+  ['theme.accent', 'accentColor', '应用主要强调色'],
+  ['theme.background', 'backgroundColor', '窗口背景色'],
+  ['theme.surface', 'surfaceColor', '卡片与面板色'],
+  ['theme.sidebar', 'sidebarColor', '侧边栏背景色'],
+  ['theme.text', 'textColor', '主要文字色'],
+  ['theme.muted', 'mutedColor', '次要文字色'],
+  ['theme.border', 'borderColor', '边框色'],
+  ['theme.success', 'successColor', '成功语义色'],
+  ['theme.warning', 'warningColor', '警告语义色'],
+  ['theme.danger', 'dangerColor', '危险语义色'],
+] as const;
 let applyingPreset = false;
 
 export default defineToolPlugin({
@@ -61,7 +74,10 @@ export default defineToolPlugin({
   events: {
     load(context) {
       render(context.settings);
-      return resetTheme;
+      const extension = createThemeExtension(context.storage, context.settings);
+      const defaultRegistrations = defaultThemeColors.map(([key, settingKey, description]) => extension.registerThemeColor(key, settingKey, description));
+      const registration = context.extensions.registerExtension(extension);
+      return () => { defaultRegistrations.forEach(item => item.dispose()); registration.dispose(); resetTheme(); };
     },
     settingsChanged(context, key) {
       if (key === 'preset') {

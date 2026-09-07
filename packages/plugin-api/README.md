@@ -13,3 +13,29 @@ import { defineToolPlugin, type PluginComponentApi } from '@wttch-hub/plugin-api
 ```
 
 相关指南：[扩展插件 API](../../docs/extending-plugin-api.md)、[开发新插件](../../docs/new-plugin.md)、[工作区构建与发布](../../docs/operations.md)。
+
+## 跨插件扩展
+
+插件可在 `load` 中通过 `context.extensions.registerExtension()` 导出一个受控对象；其他插件使用
+`context.extensions.getExtension('插件 ID')` 读取。扩展只在当前渲染器有效，插件禁用或卸载后自动失效。
+
+主题插件提供的颜色扩展是一个示例：
+
+```ts
+type ThemeExtension = {
+  registerColor(key: string, defaultValue: string, description?: string): { dispose(): void };
+  getColor(key: string): string | undefined;
+  onDidChange(listener: () => void): { dispose(): void };
+};
+
+const theme = context.extensions.getExtension<ThemeExtension>('theme');
+if (theme) {
+  context.subscriptions.push(theme.registerColor('todo.priority-high', '#E5484D', 'Todo 高优先级颜色'));
+  context.subscriptions.push(theme.onDidChange(() => {
+    const color = theme.getColor('todo.priority-high');
+    // 将 color 应用于本插件 UI。
+  }));
+}
+```
+
+建议在插件激活后读取依赖扩展，并将返回的 `Disposable` 放入 `subscriptions`，这样禁用时会自动清理注册。

@@ -14,6 +14,7 @@ import { createPluginServicesApi } from '../src/services/pluginApi';
 import { createPluginDataApi } from '../src/data/pluginApi';
 import { createPluginAiApi } from '../src/ai/pluginApi';
 import { createLifecycleQueue } from '../src/plugins/lifecycleQueue';
+import { createPluginExtensionRegistry } from '../src/plugins/extensions';
 
 /**
  * 运行真实 runtime 源码，仅替换工具发现和浏览器接口。
@@ -25,9 +26,18 @@ const createRuntime = (events: ToolPlugin['events']) => {
   const dependencies: Record<string, unknown> = {
     vue,
     './lifecycleQueue': { createLifecycleQueue },
+    './extensions': { createPluginExtensionRegistry },
     '../ai/pluginApi': { createPluginAiApi },
     '../data/pluginApi': { createPluginDataApi },
     '../services/pluginApi': { createPluginServicesApi },
+    '@wttch-hub/plugin-debug': {
+      createElectronPluginDebugger: () => ({
+        api: {
+          log: (): void => undefined, debug: (): void => undefined, info: (): void => undefined,
+          warn: (): void => undefined, error: (): void => undefined,
+        },
+      }),
+    },
     '../config/tools': { allTools: [{
       id: 'test', name: '测试插件', events,
       settings: { fields: [{ key: 'enabled', type: 'boolean', defaultValue: true }] },

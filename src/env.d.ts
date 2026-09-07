@@ -53,6 +53,10 @@ interface Window {
     installPluginPackage(): Promise<import('./types/plugin').PluginInstallResult>;
     removePluginPackage(file: string): Promise<import('./types/plugin').PluginPackageInfo[]>;
   };
+  /** Electron 中的插件开发日志桥；仅由 @wttch-hub/plugin-debug 消费。 */
+  pluginDebugHost?: {
+    log(entry: import('@wttch-hub/plugin-api').PluginDebugEntry): void;
+  };
 
   /** Present inside Electron: forwards folderart's icon-font search to main. */
   iconFontSearch?: (body: string) => Promise<IconfontSearchResponse>;

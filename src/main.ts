@@ -145,6 +145,7 @@ const IPC = {
   pluginPackages: 'plugins:list',
   pluginInstall: 'plugins:install',
   pluginRemove: 'plugins:remove',
+  pluginDebugLog: 'plugins:debug-log',
 } as const;
 
 const floatingWidgets = new Map<string, BrowserWindow>();
@@ -276,6 +277,23 @@ ipcMain.handle(IPC.pluginRemove, (_event, file: string) => {
   if (path.dirname(target) !== managedDirectory || !target.endsWith('.zip')) throw new Error('无效的插件包路径');
   if (fs.existsSync(target)) fs.unlinkSync(target);
   return loadPluginPackages();
+});
+
+/** 受控的单向插件调试日志：只接受当前 Electron 窗口，避免暴露通用 IPC 给插件。 */
+ipcMain.on(IPC.pluginDebugLog, (event, input: unknown) => {
+  if (!BrowserWindow.fromWebContents(event.sender)) return;
+  if (!input || typeof input !== 'object') return;
+  const entry = input as { pluginId?: unknown; level?: unknown; message?: unknown; data?: unknown; timestamp?: unknown };
+  if (!safeFloatingPluginId(entry.pluginId)) return;
+  if (!['debug', 'info', 'warn', 'error'].includes(String(entry.level))) return;
+  const message = typeof entry.message === 'string' ? entry.message.trim().slice(0, 2_000) : '';
+  if (!message) return;
+  let data = '';
+  if (entry.data !== undefined) {
+    try { data = ` ${JSON.stringify(entry.data).slice(0, 10_000)}`; } catch { data = ' [unserializable data]'; }
+  }
+  const level = entry.level as 'debug' | 'info' | 'warn' | 'error';
+  console[level](`[plugin:${entry.pluginId}] ${message}${data}`);
 });
 
 type SystemStatsSnapshot = {

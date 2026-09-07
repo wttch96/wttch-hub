@@ -7,7 +7,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcRendererEvent } from 'electron';
 import type { AiBridge } from './ai/contracts';
-import type { AiStatus, FloatingWidgetWindowOptions, PluginNotification } from '@wttch-hub/plugin-api';
+import type { AiStatus, FloatingWidgetWindowOptions, PluginDebugEntry, PluginNotification } from '@wttch-hub/plugin-api';
 
 // On Windows the renderer draws a full macOS-style title bar, so expose a
 // small, explicit surface for driving the native window from the page.
@@ -56,6 +56,11 @@ contextBridge.exposeInMainWorld('toolHost', {
   pluginPackages: () => ipcRenderer.invoke('plugins:list'),
   installPluginPackage: () => ipcRenderer.invoke('plugins:install'),
   removePluginPackage: (file: string) => ipcRenderer.invoke('plugins:remove', file),
+});
+
+// 调试日志只有固定的单向通道；不向插件暴露 ipcRenderer 或任意主进程能力。
+contextBridge.exposeInMainWorld('pluginDebugHost', {
+  log: (entry: PluginDebugEntry) => ipcRenderer.send('plugins:debug-log', entry),
 });
 
 // folderart's online icon-font search needs a same-origin proxy to iconfont.cn

@@ -7,6 +7,9 @@ import type {
   AiStatus,
   PluginActivationContext,
   PluginComponentApi,
+  PluginDebugApi,
+  PluginDebugEntry,
+  PluginDebugLevel,
   PluginLifecycleContext,
   PluginStorageApi,
 } from '@wttch-hub/plugin-api';
@@ -27,6 +30,62 @@ export type PluginDebugEvents = {
   notifications: Array<{ title: string; body?: string }>;
   published: Array<{ serviceId: string; id: string; title: string; text: string }>;
   toasts: string[];
+  logs: PluginDebugEntry[];
+};
+
+/** Electron preload 暴露的最小桥接面；包本身不直接导入 Electron，故仍可在 Node 测试中使用。 */
+export type ElectronPluginDebugBridge = {
+  log(entry: PluginDebugEntry): void;
+};
+
+export type ElectronPluginDebugOptions = {
+  pluginId: string;
+  /** 注入此项可用于测试；省略时自动使用 Electron preload 的 window.pluginDebugHost。 */
+  bridge?: ElectronPluginDebugBridge;
+  /** 保留在内存中的最近日志数，默认 200 条。 */
+  maxEntries?: number;
+};
+
+export type ElectronPluginDebugger = {
+  api: PluginDebugApi;
+  entries: readonly PluginDebugEntry[];
+};
+
+type DebugWindow = { pluginDebugHost?: ElectronPluginDebugBridge };
+
+const debugApi = (pluginId: string, emit: (entry: PluginDebugEntry) => void): PluginDebugApi => {
+  const log = (level: PluginDebugLevel, message: string, data?: unknown) => emit({
+    pluginId,
+    level,
+    message: String(message),
+    ...(data === undefined ? {} : { data }),
+    timestamp: new Date().toISOString(),
+  });
+  return {
+    log,
+    debug: (message, data) => log('debug', message, data),
+    info: (message, data) => log('info', message, data),
+    warn: (message, data) => log('warn', message, data),
+    error: (message, data) => log('error', message, data),
+  };
+};
+
+/**
+ * 创建默认的 Electron 调试器。
+ *
+ * 在桌面应用内，日志会经 preload 转发到 Electron 主进程，并保留在 entries
+ * 供插件开发者检查；在浏览器预览或 Node 中，缺少桥接时仍会安全地仅记录内存日志。
+ */
+export const createElectronPluginDebugger = (options: ElectronPluginDebugOptions): ElectronPluginDebugger => {
+  const entries: PluginDebugEntry[] = [];
+  const maxEntries = Math.max(1, Math.floor(options.maxEntries ?? 200));
+  const bridge = options.bridge ?? (globalThis as typeof globalThis & { window?: DebugWindow }).window?.pluginDebugHost;
+  const emit = (entry: PluginDebugEntry) => {
+    entries.push(entry);
+    if (entries.length > maxEntries) entries.splice(0, entries.length - maxEntries);
+    bridge?.log(entry);
+  };
+  return { api: debugApi(options.pluginId, emit), entries };
 };
 
 const disposable = (callback: () => void) => ({ dispose: callback });
@@ -40,9 +99,10 @@ const disposable = (callback: () => void) => ({ dispose: callback });
 export const createPluginDebugHost = (options: PluginDebugHostOptions) => {
   const settings = new Map(Object.entries(options.settings ?? {}));
   const storage = new Map(Object.entries(options.storage ?? {}));
+  let extension: object | undefined;
   const settingListeners = new Set<ChangeListener>();
   const storageListeners = new Set<ChangeListener>();
-  const events: PluginDebugEvents = { notifications: [], published: [], toasts: [] };
+  const events: PluginDebugEvents = { notifications: [], published: [], toasts: [], logs: [] };
   const status: AiStatus = options.aiStatus ?? {
     enabled: false, configured: false, hasApiKey: false, provider: 'deepseek',
     baseUrl: '', model: '', timeoutMs: 30_000, connection: 'untested',
@@ -66,6 +126,15 @@ export const createPluginDebugHost = (options: PluginDebugHostOptions) => {
     code: 'NOT_CONFIGURED', message: '调试宿主未配置 AI 响应。', retryable: false,
   } });
   const api: PluginComponentApi = {
+    debug: debugApi(options.pluginId, (entry) => events.logs.push(entry)),
+    extensions: {
+      registerExtension: <T extends object>(next: T) => {
+        if (extension) throw new Error(`插件 ${options.pluginId} 已注册扩展。`);
+        extension = next;
+        return { dispose: () => { if (extension === next) extension = undefined; } };
+      },
+      getExtension: <T extends object>(pluginId: string) => pluginId === options.pluginId ? extension as T | undefined : undefined,
+    },
     host: {
       systemStats: async () => ({ cpu: 0, memory: 0, gpu: 0, readBytes: 0, writeBytes: 0, downloadBytes: 0, uploadBytes: 0 }),
       showNotification: async (notification) => {

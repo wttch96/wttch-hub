@@ -3,9 +3,11 @@
 -->
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, inject, onBeforeUnmount, ref } from 'vue';
 import { Check, Moon, Palette, Sun } from 'lucide-vue-next';
+import { PLUGIN_COMPONENT_API_KEY, type PluginComponentApi } from '@wttch-hub/plugin-api';
 import { customThemeDefaults, themePresets, type ThemePalette } from '../theme';
+import type { ThemeExtension } from '../extension';
 
 const props = withDefaults(defineProps<{
   preset?: string; scheme?: string; accentColor?: string; backgroundColor?: string;
@@ -20,6 +22,12 @@ const props = withDefaults(defineProps<{
   dangerColor: customThemeDefaults.danger,
 });
 const emit = defineEmits<{ 'update-setting': [key: string, value: string] }>();
+const api = inject<PluginComponentApi>(PLUGIN_COMPONENT_API_KEY);
+const themeExtension = api?.extensions.getExtension<ThemeExtension>('theme');
+const externalColors = () => (themeExtension?.getColors() ?? []).filter(color => !color.key.startsWith('theme.'));
+const registeredColors = ref(externalColors());
+const extensionListener = themeExtension?.onDidChange(() => { registeredColors.value = externalColors(); });
+onBeforeUnmount(() => extensionListener?.dispose());
 const presetEntries = Object.entries(themePresets);
 const palette = computed<ThemePalette>(() => props.preset !== 'custom' && themePresets[props.preset]
   ? themePresets[props.preset]
@@ -35,6 +43,7 @@ const colorControls = computed(() => [
   ['warningColor', '警告', props.warningColor], ['dangerColor', '危险', props.dangerColor],
 ]);
 const updateColor = (key: string, event: Event) => emit('update-setting', key, (event.target as HTMLInputElement).value);
+const updateRegisteredColor = (key: string, event: Event) => themeExtension?.setColor(key, (event.target as HTMLInputElement).value);
 </script>
 
 <template>
@@ -66,6 +75,16 @@ const updateColor = (key: string, event: Event) => emit('update-setting', key, (
         <label v-for="([key, label, value]) in colorControls" :key="key">
           <input type="color" :value="value" @input="updateColor(key, $event)">
           <span><strong>{{ label }}</strong><code>{{ value.toUpperCase() }}</code></span>
+        </label>
+      </div>
+    </div>
+
+    <div v-if="registeredColors.length" class="theme-section">
+      <div class="section-heading"><div><h3>插件扩展颜色</h3><p>由其他插件注册；修改后会立即通过主题扩展提供给对应插件。</p></div></div>
+      <div class="color-grid">
+        <label v-for="color in registeredColors" :key="color.key" :title="color.description">
+          <input type="color" :value="color.value" @input="updateRegisteredColor(color.key, $event)">
+          <span><strong>{{ color.key }}</strong><code>{{ color.value.toUpperCase() }}</code><em v-if="color.description">{{ color.description }}</em></span>
         </label>
       </div>
     </div>
@@ -104,6 +123,7 @@ const updateColor = (key: string, event: Event) => emit('update-setting', key, (
 .color-grid span { display: flex; flex-direction: column; min-width: 0; }
 .color-grid strong { font-size: 10px; white-space: nowrap; }
 .color-grid code { color: var(--text-secondary); font-size: 8px; }
+.color-grid em { overflow: hidden; color: var(--text-secondary); font-size: 8px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
 .preview { display: grid; grid-template-columns: 74px 1fr; min-height: 150px; margin-top: 13px; overflow: hidden; border: 1px solid; border-radius: 10px; }
 .preview aside { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
 .preview aside i { width: 100%; height: 16px; border-radius: 4px; background: rgba(127, 127, 127, .2); }

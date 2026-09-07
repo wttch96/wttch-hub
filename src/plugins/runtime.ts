@@ -7,6 +7,7 @@ import { createPluginServicesApi } from '../services/pluginApi';
 import { createPluginDataApi } from '../data/pluginApi';
 import { createPluginAiApi } from '../ai/pluginApi';
 import { createLifecycleQueue } from './lifecycleQueue';
+import { createPluginExtensionRegistry } from './extensions';
 import type {
   Disposable,
   PluginActivationContext,
@@ -17,6 +18,7 @@ import type {
   PluginLifecycleContext,
   ToolPlugin,
 } from '@wttch-hub/plugin-api';
+import { createElectronPluginDebugger } from '@wttch-hub/plugin-debug';
 import { allTools } from '../config/tools';
 import { useSheet } from '../composables/useSheet';
 import { useToast } from '../composables/useToast';
@@ -49,6 +51,7 @@ const settingListeners = new Map<string, Set<(key: string, value: SettingValue) 
 const storageListeners = new Map<string, Set<(key: string, value: unknown) => void>>();
 const loadTasks = new Map<string, Promise<void>>();
 const enqueueLifecycle = createLifecycleQueue();
+const extensions = createPluginExtensionRegistry();
 let initialized = false;
 
 for (const plugin of allTools) {
@@ -106,6 +109,7 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
   storageListeners.set(plugin.id, pluginStorageListeners);
   const toast = useToast();
   const sheet = useSheet();
+  const debug = createElectronPluginDebugger({ pluginId: plugin.id }).api;
   return {
     path,
     reason,
@@ -165,6 +169,11 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
       },
       closeSheet: sheet.close,
     },
+    debug,
+    extensions: {
+      registerExtension: (extension) => extensions.register(plugin.id, extension),
+      getExtension: <T extends object>(pluginId: string) => states[pluginId]?.enabled ? extensions.get<T>(pluginId) : undefined,
+    },
   };
 };
 
@@ -209,6 +218,7 @@ const unload = async (plugin: ToolPlugin, reason: PluginDeactivationReason) => {
     const owned = subscriptions.get(plugin.id) ?? [];
     for (const item of [...owned].reverse()) await item.dispose();
     owned.length = 0;
+    extensions.remove(plugin.id);
     states[plugin.id].status = 'disabled';
   } catch (error) { fail(plugin, error); }
 };
@@ -285,8 +295,8 @@ export const pluginRuntime = {
   componentApi(id: string): PluginComponentApi | undefined {
     const plugin = pluginFor(id);
     if (!plugin) return undefined;
-    const { host, ai, data, services, settings, storage: pluginStorage, ui } = contextFor(plugin, '', 'manual');
-    return { host, ai, data, services, settings, storage: pluginStorage, ui };
+    const { host, ai, data, services, settings, storage: pluginStorage, ui, debug, extensions: pluginExtensions } = contextFor(plugin, '', 'manual');
+    return { host, ai, data, services, settings, storage: pluginStorage, ui, debug, extensions: pluginExtensions };
   },
   async shutdown() { await Promise.all(allTools.map((plugin) => enqueueLifecycle(plugin.id, () => unload(plugin, 'shutdown')))); },
 };

@@ -6,6 +6,19 @@ import { ListTodo } from 'lucide-vue-next';
 import { defineToolPlugin, type PluginComponentApi } from '@wttch-hub/plugin-api';
 import { connectTodoStore, disconnectTodoStore } from './store';
 
+type ThemeExtension = {
+  registerColor(key: string, defaultValue: string, description?: string): { dispose(): void };
+  getColor(key: string): string | undefined;
+  onDidChange(listener: () => void): { dispose(): void };
+};
+
+const applyPriorityColors = (theme: ThemeExtension) => {
+  const root = document.documentElement;
+  root.style.setProperty('--todo-priority-low', theme.getColor('todo.priority-low') ?? '#168A45');
+  root.style.setProperty('--todo-priority-normal', theme.getColor('todo.priority-normal') ?? '#0A84FF');
+  root.style.setProperty('--todo-priority-high', theme.getColor('todo.priority-high') ?? '#E5484D');
+};
+
 export default defineToolPlugin({
   apiVersion: 1,
   id: 'todo',
@@ -19,7 +32,19 @@ export default defineToolPlugin({
   component: () => import('./components/TodoPage.vue'),
   capabilities: { toast: true },
   events: {
-    load(context) { connectTodoStore(context as PluginComponentApi); return disconnectTodoStore; },
+    load(context) {
+      connectTodoStore(context as PluginComponentApi);
+      const theme = context.extensions.getExtension<ThemeExtension>('theme');
+      if (!theme) return disconnectTodoStore;
+      const registrations = [
+        theme.registerColor('todo.priority-low', '#168A45', 'Todo 低优先级颜色'),
+        theme.registerColor('todo.priority-normal', '#0A84FF', 'Todo 普通优先级颜色'),
+        theme.registerColor('todo.priority-high', '#E5484D', 'Todo 高优先级颜色'),
+        theme.onDidChange(() => applyPriorityColors(theme)),
+      ];
+      applyPriorityColors(theme);
+      return () => { registrations.reverse().forEach(item => item.dispose()); disconnectTodoStore(); };
+    },
     activate() { return { dispose() { /* 页面与 Widget 不持有额外资源。 */ } }; },
     deactivate() { /* 数据由插件私有存储持续保存。 */ },
     unload() { /* 存储订阅由宿主统一释放。 */ },
