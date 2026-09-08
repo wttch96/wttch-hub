@@ -48,10 +48,16 @@ interface Window {
     showNotification(options: import('./types/plugin').PluginNotification): Promise<boolean>;
     openFloatingWidget(pluginId: string, options?: import('./types/plugin').FloatingWidgetWindowOptions): Promise<boolean>;
     updateFloatingWidget(pluginId: string, options: import('./types/plugin').FloatingWidgetWindowOptions): Promise<boolean>;
-    closeFloatingWidget(pluginId: string): Promise<boolean>;
+    closeFloatingWidget(pluginId: string, id?: string): Promise<boolean>;
+    showWorkbench(): Promise<boolean>;
     pluginPackages(): Promise<import('./types/plugin').PluginPackageInfo[]>;
     installPluginPackage(): Promise<import('./types/plugin').PluginInstallResult>;
     removePluginPackage(input: Pick<import('./types/plugin').PluginPackageInfo, 'file' | 'source'>): Promise<import('./types/plugin').PluginPackageInfo[]>;
+  };
+  /** Electron 文件存储桥：插件运行时按 pluginId 访问其专属 data.json。 */
+  pluginStorageHost?: {
+    read(pluginId: string): Record<string, unknown>;
+    write(pluginId: string, value: Record<string, unknown>): Promise<boolean>;
   };
   /** Electron 中的插件开发日志桥；仅由 @wttch-hub/plugin-debug 消费。 */
   pluginDebugHost?: {

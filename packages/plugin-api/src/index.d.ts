@@ -35,6 +35,8 @@ export type PluginNotification = {
 };
 
 export type FloatingWidgetWindowOptions = {
+  /** 同一插件内的窗口唯一标识；省略时使用默认窗口。 */
+  id?: string;
   width?: number;
   height?: number;
   alwaysOnTop?: boolean;
@@ -51,7 +53,9 @@ export interface ToolHostApi {
   /** 更新浮动 Widget 的置顶、锁定或尺寸状态。 */
   updateFloatingWidget(options: FloatingWidgetWindowOptions): Promise<boolean>;
   /** 关闭当前插件的浮动 Widget。 */
-  closeFloatingWidget(): Promise<boolean>;
+  closeFloatingWidget(id?: string): Promise<boolean>;
+  /** 唤起工作台主窗口，用于提醒悬浮窗点击后的跳转。 */
+  showWorkbench(): Promise<boolean>;
 }
 
 export type MaybePromise<T> = T | Promise<T>;

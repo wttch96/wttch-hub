@@ -144,6 +144,7 @@ export const createPluginDebugHost = (options: PluginDebugHostOptions) => {
       openFloatingWidget: async () => true,
       updateFloatingWidget: async () => true,
       closeFloatingWidget: async () => true,
+      showWorkbench: async () => true,
     },
     ai: {
       getStatus: async () => ({ ok: true, value: status }),

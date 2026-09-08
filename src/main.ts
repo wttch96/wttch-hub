@@ -32,6 +32,7 @@ type PluginBundle = {
   plugins: Omit<PluginPackageInfo, 'file'>[]
 };
 type FloatingWidgetOptions = {
+  id?: string;
   width?: number;
   height?: number;
   alwaysOnTop?: boolean;
@@ -142,14 +143,19 @@ const IPC = {
   floatingOpen: 'floating-widget:open',
   floatingUpdate: 'floating-widget:update',
   floatingClose: 'floating-widget:close',
+  showWorkbench: 'workbench:show',
   pluginPackages: 'plugins:list',
   pluginInstall: 'plugins:install',
   pluginRemove: 'plugins:remove',
   pluginDebugLog: 'plugins:debug-log',
+  pluginStorageRead: 'plugin-storage:read',
+  pluginStorageWrite: 'plugin-storage:write',
 } as const;
 
 const floatingWidgets = new Map<string, BrowserWindow>();
 const safeFloatingPluginId = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(value);
+const safeFloatingWindowId = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(value);
+const floatingWindowKey = (pluginId: string, id = 'default') => `${pluginId}:${id}`;
 const floatingSize = (value: unknown, fallback: number, min: number, max: number) => typeof value === 'number' && Number.isFinite(value)
   ? Math.round(Math.max(min, Math.min(max, value)))
   : fallback;
@@ -184,7 +190,10 @@ const applyFloatingOptions = (window: BrowserWindow, options: FloatingWidgetOpti
 
 ipcMain.handle(IPC.floatingOpen, async (_event, pluginId: unknown, options: FloatingWidgetOptions = {}) => {
   if (!safeFloatingPluginId(pluginId)) throw new Error('无效的浮动 Widget 插件 ID');
-  const existing = floatingWidgets.get(pluginId);
+  const windowId = options.id ?? 'default';
+  if (!safeFloatingWindowId(windowId)) throw new Error('无效的浮动窗口 ID');
+  const key = floatingWindowKey(pluginId, windowId);
+  const existing = floatingWidgets.get(key);
   if (existing && !existing.isDestroyed()) {
     applyFloatingOptions(existing, options);
     existing.show(); existing.focus();
@@ -210,9 +219,9 @@ ipcMain.handle(IPC.floatingOpen, async (_event, pluginId: unknown, options: Floa
     alwaysOnTop: options.alwaysOnTop !== false,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
   });
-  floatingWidgets.set(pluginId, floatingWindow);
+  floatingWidgets.set(key, floatingWindow);
   setFloatingVisibleOnAllWorkspaces(floatingWindow, options.alwaysOnTop !== false);
-  floatingWindow.on('closed', () => floatingWidgets.delete(pluginId));
+  floatingWindow.on('closed', () => floatingWidgets.delete(key));
   const hash = `/floating/${pluginId}`;
   try {
     // `ready-to-show` is not guaranteed for every transparent frameless
@@ -225,22 +234,31 @@ ipcMain.handle(IPC.floatingOpen, async (_event, pluginId: unknown, options: Floa
     floatingWindow.focus();
     return floatingWindow.isVisible();
   } catch (error) {
-    floatingWidgets.delete(pluginId);
+    floatingWidgets.delete(key);
     if (!floatingWindow.isDestroyed()) floatingWindow.destroy();
     console.error(`[floating-widget] failed to open ${pluginId}:`, error);
     throw error;
   }
 });
-ipcMain.handle(IPC.floatingUpdate, (_event, pluginId: unknown, options: FloatingWidgetOptions = {}) => {
+ipcMain.handle(IPC.floatingUpdate, (event, pluginId: unknown, options: FloatingWidgetOptions = {}) => {
   if (!safeFloatingPluginId(pluginId)) return false;
-  const floatingWindow = floatingWidgets.get(pluginId);
+  const id = options.id ?? 'default';
+  if (!safeFloatingWindowId(id)) return false;
+  const ownWindow = BrowserWindow.fromWebContents(event.sender);
+  const floatingWindow = ownWindow && [...floatingWidgets.entries()].some(([key, value]) => key.startsWith(`${pluginId}:`) && value === ownWindow)
+    ? ownWindow
+    : floatingWidgets.get(floatingWindowKey(pluginId, id));
   if (!floatingWindow || floatingWindow.isDestroyed()) return false;
   applyFloatingOptions(floatingWindow, options);
   return true;
 });
-ipcMain.handle(IPC.floatingClose, (_event, pluginId: unknown) => {
+ipcMain.handle(IPC.floatingClose, (event, pluginId: unknown, id?: unknown) => {
   if (!safeFloatingPluginId(pluginId)) return false;
-  const floatingWindow = floatingWidgets.get(pluginId);
+  // 浮动窗内部调用 close 时，以 sender 为准，确保非默认实例关闭自身。
+  const ownWindow = BrowserWindow.fromWebContents(event.sender);
+  const floatingWindow = ownWindow && [...floatingWidgets.entries()].some(([key, value]) => key.startsWith(`${pluginId}:`) && value === ownWindow)
+    ? ownWindow
+    : floatingWidgets.get(floatingWindowKey(pluginId, typeof id === 'string' ? id : 'default'));
   if (!floatingWindow || floatingWindow.isDestroyed()) return false;
   floatingWindow.close();
   return true;
@@ -281,6 +299,32 @@ ipcMain.handle(IPC.pluginRemove, (_event, input: { file?: unknown; source?: unkn
   if (path.dirname(target) !== location.directory || !target.endsWith('.zip')) throw new Error('无效的插件包路径');
   if (fs.existsSync(target)) fs.unlinkSync(target);
   return loadPluginPackages();
+});
+
+/** 插件私有数据按插件 ID 分目录保存，便于后续替换为 OSS 同步适配器。 */
+const pluginStorageFile = (pluginId: string) => path.join(app.getPath('userData'), 'plugin-data', pluginId, 'data.json');
+const readPluginStorage = (pluginId: unknown): Record<string, unknown> => {
+  if (!safeFloatingPluginId(pluginId)) return {};
+  try {
+    const value = JSON.parse(fs.readFileSync(pluginStorageFile(pluginId), 'utf8'));
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  } catch { return {}; }
+};
+ipcMain.on(IPC.pluginStorageRead, (event, pluginId: unknown) => { event.returnValue = readPluginStorage(pluginId); });
+ipcMain.handle(IPC.pluginStorageWrite, (_event, pluginId: unknown, value: unknown) => {
+  if (!safeFloatingPluginId(pluginId) || !value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const file = pluginStorageFile(pluginId);
+  try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(value, null, 2), 'utf8'); return true; }
+  catch (error) { console.error(`[plugin-storage] failed to save ${pluginId}:`, error); return false; }
+});
+
+/** 悬浮提醒点击后恢复被隐藏或最小化的工作台。 */
+ipcMain.handle(IPC.showWorkbench, () => {
+  const window = createWindow();
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
+  return window.isVisible();
 });
 
 /** 受控的单向插件调试日志：只接受当前 Electron 窗口，避免暴露通用 IPC 给插件。 */

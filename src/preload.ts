@@ -41,7 +41,12 @@ const toolHost = {
   showNotification: (options: PluginNotification) => ipcRenderer.invoke('notifications:show', options),
   openFloatingWidget: (pluginId: string, options?: FloatingWidgetWindowOptions) => ipcRenderer.invoke('floating-widget:open', pluginId, options),
   updateFloatingWidget: (pluginId: string, options: FloatingWidgetWindowOptions) => ipcRenderer.invoke('floating-widget:update', pluginId, options),
-  closeFloatingWidget: (pluginId: string) => ipcRenderer.invoke('floating-widget:close', pluginId),
+  closeFloatingWidget: (pluginId: string, id?: string) => ipcRenderer.invoke('floating-widget:close', pluginId, id),
+  showWorkbench: () => ipcRenderer.invoke('workbench:show'),
+};
+const pluginStorageHost = {
+  read: (pluginId: string): Record<string, unknown> => ipcRenderer.sendSync('plugin-storage:read', pluginId),
+  write: (pluginId: string, value: Record<string, unknown>) => ipcRenderer.invoke('plugin-storage:write', pluginId, value),
 };
 
 export type WindowControlsApi = typeof windowControls;
@@ -53,10 +58,12 @@ contextBridge.exposeInMainWorld('toolHost', {
   openFloatingWidget: toolHost.openFloatingWidget,
   updateFloatingWidget: toolHost.updateFloatingWidget,
   closeFloatingWidget: toolHost.closeFloatingWidget,
+  showWorkbench: toolHost.showWorkbench,
   pluginPackages: () => ipcRenderer.invoke('plugins:list'),
   installPluginPackage: () => ipcRenderer.invoke('plugins:install'),
   removePluginPackage: (input: { file: string; source?: 'managed' | 'sandbox' | 'workspace' }) => ipcRenderer.invoke('plugins:remove', input),
 });
+contextBridge.exposeInMainWorld('pluginStorageHost', pluginStorageHost);
 
 // 调试日志只有固定的单向通道；不向插件暴露 ipcRenderer 或任意主进程能力。
 contextBridge.exposeInMainWorld('pluginDebugHost', {

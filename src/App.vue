@@ -5,7 +5,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { Bug } from 'lucide-vue-next';
+import { Bot, Bug, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next';
+import { useAiChat } from './composables/useAiChat';
 import Sidebar from './components/Sidebar.vue';
 import SheetHost from './components/SheetHost.vue';
 import AiChatDrawer from './components/AiChatDrawer.vue';
@@ -45,6 +46,8 @@ const customChrome = controls?.platform === 'win32';
 const macOS = controls?.platform === 'darwin';
 
 const isMaximized = ref(false);
+const sidebarCollapsed = ref(false);
+const { open: openAiChat } = useAiChat();
 let unsubscribe: (() => void) | undefined;
 let releaseRoutePlugin: (() => Promise<void>) | undefined;
 let backgroundInitialization: ReturnType<typeof setTimeout> | undefined;
@@ -203,12 +206,14 @@ const onTitleDblClick = (event: MouseEvent) => {
           </svg>
         </button>
       </div>
+      <div class="titlebar-left"><button type="button" :title="sidebarCollapsed ? '展开侧栏' : '折叠侧栏'" @click="sidebarCollapsed = !sidebarCollapsed"><component :is="sidebarCollapsed ? PanelLeftOpen : PanelLeftClose" :size="17" /></button></div>
       <span class="title">{{ appName }}</span>
+      <button class="titlebar-ai" type="button" title="AI 聊天" @click="openAiChat"><Bot :size="17" /></button>
     </header>
 
     <!-- App shell: collapsible sidebar + routed content -->
     <div class="shell">
-      <Sidebar />
+      <Sidebar :collapsed="sidebarCollapsed" />
 
       <main class="content">
         <RouterView v-slot="{ Component }">
@@ -304,13 +309,22 @@ const onTitleDblClick = (event: MouseEvent) => {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-left: 16px;
+  padding-right: 16px;
   -webkit-app-region: no-drag;
 }
+/* Windows 自绘标题栏必须明确清除 left，防止主题或热更新残留样式覆盖 right。 */
+.window.is-custom .traffic-lights { left: 16px !important; right: auto !important; padding-right: 0; }
+.titlebar-left, .titlebar-ai { position: absolute; z-index: 2; -webkit-app-region: no-drag; }
+.titlebar-left { left: 16px; }
+.titlebar-ai { right: 16px; }
+.titlebar-left button, .titlebar-ai { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.titlebar-left button:hover, .titlebar-ai:hover { background: var(--accent-weak); color: var(--text); }
+.window.is-custom .titlebar-left { left: 84px; }
+.window.is-custom .titlebar-ai { right: 16px; }
 
 .tl {
   display: flex;

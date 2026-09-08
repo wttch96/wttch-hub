@@ -4,12 +4,17 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import DOMPurify from 'dompurify';
+import MarkdownIt from 'markdown-it';
 import { useRouter } from 'vue-router';
 import { Bot, LoaderCircle, Plus, Send, Settings2, Square, X } from 'lucide-vue-next';
 import { useAiChat } from '../composables/useAiChat';
 import { useAiService } from '../composables/useAiService';
 
 const { opened, close, session } = useAiChat();
+const markdown = new MarkdownIt({ breaks: true, linkify: true });
+/** 外部模型内容先转 Markdown，再净化后才交给 v-html。 */
+const renderMarkdown = (value?: string) => DOMPurify.sanitize(markdown.render(value ?? ''));
 const ai = useAiService();
 const router = useRouter();
 const dialog = ref<HTMLDialogElement>();
@@ -152,9 +157,7 @@ const closeBackdrop = (event: MouseEvent) => {
         <div class="chat-message assistant">
           <span class="chat-role">AI</span>
           <!-- 模型文本使用插值渲染，不将其当成 HTML 执行。 -->
-          <p v-if="exchange.status === 'done'">
-            {{ exchange.response?.content }}
-          </p>
+          <div v-if="exchange.status === 'done'" class="chat-markdown" v-html="renderMarkdown(exchange.response?.content)" />
           <p
             v-else-if="exchange.status === 'pending'"
             class="chat-wait"
@@ -243,7 +246,7 @@ const closeBackdrop = (event: MouseEvent) => {
 </template>
 
 <style scoped>
-.ai-drawer { position: fixed; inset: 0 0 0 auto; margin: 0; padding: 0; width: 440px; max-width: 100vw; height: 100dvh; max-height: 100dvh; border: 0; border-left: 1px solid var(--hairline); background: var(--panel); color: var(--text); box-shadow: -14px 0 44px rgba(0,0,0,.16); overflow: hidden; }
+.ai-drawer { position: fixed; inset: 14px 14px 14px auto; margin: 0; padding: 0; width: 440px; max-width: calc(100vw - 28px); height: auto; max-height: calc(100dvh - 28px); border: 1px solid var(--hairline); border-radius: 16px; background: var(--panel); color: var(--text); box-shadow: -14px 0 44px rgba(0,0,0,.16); overflow: hidden; }
 .ai-drawer[open] { display: flex; flex-direction: column; animation: drawer-in .2s ease-out; }
 .ai-drawer::backdrop { background: rgba(0,0,0,.18); }
 .chat-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px; border-bottom: 1px solid var(--hairline); }
@@ -279,6 +282,7 @@ textarea { display: block; width: 100%; resize: vertical; min-height: 58px; max-
 .chat-muted { color: var(--text-secondary); }
 .chat-wait { display: flex; align-items: center; gap: 8px; }
 .chat-composer { padding: 14px 18px; border-top: 1px solid var(--hairline); }
+.chat-markdown :deep(p) { margin: .45em 0; line-height: 1.6; } .chat-markdown :deep(pre) { overflow: auto; padding: 10px; border-radius: 7px; background: var(--content-bg); } .chat-markdown :deep(code) { font-family: Consolas, monospace; } .chat-markdown :deep(a) { color: var(--accent); } .chat-markdown :deep(ul), .chat-markdown :deep(ol) { padding-left: 20px; }
 .chat-composer-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; }
 .chat-composer-footer small { font-size: 10px; line-height: 1.5; color: var(--text-secondary); }
 .chat-notice { margin: 0 0 8px; font-size: 12px; color: var(--text-secondary); }

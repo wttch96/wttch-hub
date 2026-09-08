@@ -11,7 +11,8 @@ import { dueKey, isAlarmRepeat, isAlarmTime, type AlarmItem, type AlarmRepeat } 
 export { nextAlarmOccurrence } from './schedule';
 export type { AlarmItem, AlarmRepeat } from './schedule';
 
-const state = reactive({ alarms: [] as AlarmItem[], initialized: false });
+export type Reminder = { title: string; body: string; triggeredAt: number };
+const state = reactive({ alarms: [] as AlarmItem[], reminder: undefined as Reminder | undefined, initialized: false });
 let api: PluginComponentApi | undefined;
 let subscription: Disposable | undefined;
 let timer: ReturnType<typeof setInterval> | undefined;
@@ -39,11 +40,27 @@ export const connectAlarmStore = (nextApi?: PluginComponentApi) => {
   // 无订阅表示首次连接或卸载后重连：重新读取存储，接收离线期间其他窗口的改动。
   if (!subscription) {
     state.alarms = validAlarms(api.storage.get<unknown>('alarms', []));
+    const reminder = api.storage.get<unknown>('activeReminder');
+    state.reminder = isReminder(reminder) ? reminder : undefined;
     state.initialized = true;
   }
   if (!subscription) subscription = api.storage.onDidChange((key, value) => {
     if (key === 'alarms') state.alarms = validAlarms(value);
+    if (key === 'activeReminder') state.reminder = isReminder(value) ? value : undefined;
   });
+};
+
+const isReminder = (value: unknown): value is Reminder => Boolean(value && typeof value === 'object'
+  && typeof (value as Reminder).title === 'string' && typeof (value as Reminder).body === 'string'
+  && typeof (value as Reminder).triggeredAt === 'number');
+
+/** 显示应用内提醒悬浮窗；60 秒后由浮窗自身自动关闭。 */
+export const showReminder = async (pluginApi: PluginComponentApi, title: string, body: string) => {
+  const reminder = { title, body, triggeredAt: Date.now() };
+  state.reminder = reminder;
+  pluginApi.storage.update('activeReminder', reminder);
+  // 抖动留出左右安全边距：窗口本身不移动，只让内部提醒卡片在阈值内位移。
+  await pluginApi.host.openFloatingWidget({ width: 420, height: 240, alwaysOnTop: true, locked: true });
 };
 
 const persist = () => api?.storage.update('alarms', state.alarms.map((alarm) => ({ ...alarm })));
@@ -88,11 +105,8 @@ export const startAlarmScheduler = (pluginApi: PluginComponentApi, schedule = tr
         id: `${alarm.id}-${key}`, title: `闹钟：${alarm.label}`,
         text: alarm.repeat === 'once' ? '设定的提醒时间已到' : `重复闹钟 · ${alarm.time}`,
       });
-      void pluginApi.host.showNotification({
-        title: alarm.label,
-        body: alarm.repeat === 'once' ? '设定的提醒时间已到' : `重复闹钟 · ${alarm.time}`,
-        silent: pluginApi.settings.get('silent', false),
-      }).catch(() => undefined);
+      void showReminder(pluginApi, `闹钟：${alarm.label}`,
+        alarm.repeat === 'once' ? '设定的提醒时间已到' : `重复闹钟 · ${alarm.time}`).catch(() => undefined);
     }
   };
   tick();

@@ -4,9 +4,9 @@
 
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, reactive, ref } from 'vue';
-import { AlarmClock, Bell, CalendarClock, Clock3, Maximize2, Power, Trash2 } from 'lucide-vue-next';
+import { AlarmClock, Bell, CalendarClock, Clock3, Maximize2, Pause, Play, Power, TimerReset, Trash2 } from 'lucide-vue-next';
 import { PLUGIN_COMPONENT_API_KEY, type PluginComponentApi } from '@wttch-hub/plugin-api';
-import { addAlarm, alarmState, connectAlarmStore, nextAlarmOccurrence, removeAlarm, toggleAlarm, type AlarmRepeat } from '../store';
+import { addAlarm, alarmState, connectAlarmStore, nextAlarmOccurrence, removeAlarm, showReminder, toggleAlarm, type AlarmRepeat } from '../store';
 
 const api = inject<PluginComponentApi>(PLUGIN_COMPONENT_API_KEY); connectAlarmStore(api);
 const tomorrow = new Date(Date.now() + 60 * 60 * 1000);
@@ -14,8 +14,43 @@ tomorrow.setSeconds(0, 0);
 const localDateTime = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}T${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 const draft = reactive({ label: '', repeat: 'once' as AlarmRepeat, dateTime: localDateTime(tomorrow), time: '09:00' });
 const now = ref(new Date());
-const timer = setInterval(() => { now.value = new Date(); }, 1000);
+const countdownTitle = ref('倒计时提醒');
+const countdownMinutes = ref(5);
+const countdownSeconds = ref(0);
+const countdownRunning = ref(false);
+const countdownDuration = () => {
+  const minutes = Math.max(0, Math.min(1_440, Math.floor(Number(countdownMinutes.value) || 0)));
+  const seconds = Math.max(0, Math.min(59, Math.floor(Number(countdownSeconds.value) || 0)));
+  return Math.max(1, Math.min(86_400, minutes * 60 + seconds)) * 1_000;
+};
+const countdownRemaining = ref(countdownDuration());
+let countdownStartedAt = 0;
+const timer = setInterval(() => {
+  now.value = new Date();
+  if (!countdownRunning.value) return;
+  countdownRemaining.value = Math.max(0, countdownStartedAt - Date.now());
+  if (countdownRemaining.value === 0) {
+    countdownRunning.value = false;
+    if (api) void showReminder(api, countdownTitle.value.trim() || '倒计时提醒', '倒计时已完成').catch(() => undefined);
+  }
+}, 50);
 onBeforeUnmount(() => clearInterval(timer));
+const toggleCountdown = () => {
+  if (countdownRunning.value) {
+    countdownRemaining.value = Math.max(0, countdownStartedAt - Date.now());
+    countdownRunning.value = false;
+  } else {
+    if (countdownRemaining.value <= 0) countdownRemaining.value = countdownDuration();
+    countdownStartedAt = Date.now() + countdownRemaining.value;
+    countdownRunning.value = true;
+  }
+};
+const resetCountdown = () => { countdownRunning.value = false; countdownRemaining.value = countdownDuration(); };
+const updateCountdownDuration = () => { if (!countdownRunning.value) countdownRemaining.value = countdownDuration(); };
+const countdownTime = computed(() => {
+  const totalSeconds = Math.ceil(countdownRemaining.value / 1_000);
+  return `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`;
+});
 const repeats: Array<{ id: AlarmRepeat; label: string }> = [{ id: 'once', label: '仅一次' }, { id: 'daily', label: '每天' }, { id: 'weekdays', label: '工作日' }];
 const sorted = computed(() => [...alarmState.alarms].sort((a, b) => (nextAlarmOccurrence(a, now.value)?.getTime() ?? Infinity) - (nextAlarmOccurrence(b, now.value)?.getTime() ?? Infinity)));
 const enabledCount = computed(() => alarmState.alarms.filter((alarm) => alarm.enabled).length);
@@ -43,6 +78,7 @@ const openFloatingClock = async () => {
   <section class="alarm-page">
     <header><div><span>TIME & REMINDERS</span><h2><AlarmClock :size="24" />闹钟提醒</h2><p>工具页关闭后，插件仍会在后台检查提醒时间。</p></div><div class="clock"><strong>{{ now.toLocaleTimeString('zh-CN', { hour12: false }) }}</strong><span>{{ enabledCount }} 个闹钟已开启</span><button type="button" @click="openFloatingClock"><Maximize2 :size="13" />打开浮动时钟</button></div></header>
     <form class="composer card" @submit.prevent="submit"><input v-model="draft.label" maxlength="120" placeholder="提醒内容，例如：站起来活动" aria-label="提醒内容"><div class="segments"><button v-for="item in repeats" :key="item.id" type="button" :class="{ active: draft.repeat === item.id }" @click="draft.repeat = item.id">{{ item.label }}</button></div><label v-if="draft.repeat === 'once'"><CalendarClock :size="15" /><input v-model="draft.dateTime" type="datetime-local" aria-label="提醒日期和时间"></label><label v-else><Clock3 :size="15" /><input v-model="draft.time" type="time" aria-label="提醒时间"></label><button class="primary" type="submit"><Bell :size="15" />创建提醒</button></form>
+    <section class="stopwatch card"><div><span>COUNTDOWN</span><strong>{{ countdownTime }}</strong></div><div class="countdown-fields"><input v-model="countdownTitle" maxlength="80" aria-label="倒计时提醒标题" placeholder="提醒标题" :disabled="countdownRunning"><label class="countdown-input">分<input v-model.number="countdownMinutes" type="number" min="0" max="1440" :disabled="countdownRunning" @change="updateCountdownDuration"></label><label class="countdown-input">秒<input v-model.number="countdownSeconds" type="number" min="0" max="59" :disabled="countdownRunning" @change="updateCountdownDuration"></label></div><div class="stopwatch-actions"><button class="primary" type="button" @click="toggleCountdown"><Pause v-if="countdownRunning" :size="15" /><Play v-else :size="15" />{{ countdownRunning ? '暂停' : '开始' }}</button><button type="button" @click="resetCountdown"><TimerReset :size="15" />复位</button></div></section>
     <div v-if="sorted.length" class="alarm-list"><article v-for="alarm in sorted" :key="alarm.id" class="alarm-item card" :class="{ disabled: !alarm.enabled }"><button class="power" type="button" :aria-label="alarm.enabled ? '关闭闹钟' : '开启闹钟'" @click="toggleAlarm(alarm.id)"><Power :size="17" /></button><div><div class="alarm-title"><strong>{{ alarm.label }}</strong><span>{{ repeatLabel(alarm.repeat) }}</span></div><time>{{ formatDate(nextAlarmOccurrence(alarm, now)) }}</time></div><button class="delete" type="button" aria-label="删除闹钟" @click="removeAlarm(alarm.id)"><Trash2 :size="15" /></button></article></div>
     <div v-else class="empty"><AlarmClock :size="32" /><strong>还没有闹钟</strong><span>选择提醒方式和时间，创建第一条提醒。</span></div>
   </section>
@@ -51,6 +87,7 @@ const openFloatingClock = async () => {
 <style scoped>
 .alarm-page { max-width: 900px; margin: 0 auto; padding: 24px 26px 60px; color: var(--text); } header, header h2, .composer, .composer label, .alarm-item, .alarm-title { display: flex; align-items: center; } header { justify-content: space-between; gap: 20px; } header > div:first-child > span { color: var(--text-secondary); font-size: 9px; font-weight: 700; letter-spacing: .12em; } header h2 { gap: 8px; margin: 4px 0 0; font-size: 24px; } header h2 svg { color: var(--warning); } header p { margin: 5px 0 0; color: var(--text-secondary); font-size: 12px; } .clock { display: flex; align-items: flex-end; flex-direction: column; text-align: right; } .clock strong { display: block; font-size: 25px; font-variant-numeric: tabular-nums; } .clock span { color: var(--text-secondary); font-size: 10px; } .clock button { display: inline-flex; align-items: center; gap: 4px; margin-top: 7px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel); color: var(--warning); font-size: 10px; cursor: pointer; }
 .composer { gap: 10px; margin-top: 20px; padding: 14px; } input, button { font: inherit; } .composer > input { min-width: 0; flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; outline: 0; background: var(--content-bg); color: var(--text); } .composer label { gap: 5px; color: var(--text-secondary); } input[type="datetime-local"], input[type="time"] { padding: 7px; border: 1px solid var(--border); border-radius: 7px; background: var(--content-bg); color: var(--text); font-size: 11px; }
+.stopwatch { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 16px; } .stopwatch > div:first-child { display: grid; gap: 4px; } .stopwatch span { color: var(--text-secondary); font-size: 9px; font-weight: 700; letter-spacing: .12em; } .stopwatch strong { color: var(--warning); font-size: 29px; font-variant-numeric: tabular-nums; letter-spacing: .04em; } .countdown-fields { display: flex; align-items: center; gap: 7px; } .countdown-fields > input { width: 130px; padding: 7px; border: 1px solid var(--border); border-radius: 7px; background: var(--content-bg); color: var(--text); } .countdown-input { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); font-size: 11px; } .countdown-input input { width: 48px; padding: 7px; border: 1px solid var(--border); border-radius: 7px; background: var(--content-bg); color: var(--text); } .stopwatch-actions { display: flex; gap: 8px; } .stopwatch button { display: inline-flex; align-items: center; gap: 5px; padding: 8px 11px; border: 1px solid var(--border); border-radius: 7px; background: var(--content-bg); color: var(--text); cursor: pointer; } .stopwatch button:disabled { cursor: default; opacity: .45; }
 .segments { display: inline-flex; flex: 0 0 auto; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--content-bg); } .segments button { padding: 5px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 10px; cursor: pointer; } .segments button.active { background: var(--panel); color: var(--warning); box-shadow: 0 1px 4px var(--hairline); } .primary { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; padding: 8px 11px; border: 0; border-radius: 7px; background: var(--warning); color: #fff; font-weight: 600; cursor: pointer; }
 .alarm-list { display: grid; gap: 8px; margin-top: 16px; } .alarm-item { gap: 11px; padding: 14px; } .alarm-item > div { flex: 1; } .power, .delete { display: inline-flex; padding: 5px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; } .power { color: var(--warning); } .delete:hover { color: var(--danger); } .alarm-title { gap: 7px; } .alarm-title span { padding: 2px 6px; border-radius: 5px; background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--warning); font-size: 9px; } .alarm-item time { display: block; margin-top: 5px; color: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; } .alarm-item.disabled { opacity: .5; } .alarm-item.disabled .power { color: var(--text-secondary); }
 .empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 55px; color: var(--text-secondary); } .empty svg { color: var(--warning); } .empty strong { color: var(--text); } .empty span { font-size: 11px; }

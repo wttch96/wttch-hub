@@ -8,7 +8,7 @@ import { findTool } from '../config/tools';
 import { pluginRuntime } from '../plugins/runtime';
 import { PLUGIN_COMPONENT_API_KEY } from '@wttch-hub/plugin-api';
 
-const props = defineProps<{ pluginId: string }>();
+const props = defineProps<{ pluginId: string; instanceId?: string }>();
 const plugin = computed(() => findTool(props.pluginId));
 const widgetComponent = computed(() => plugin.value?.widget ? defineAsyncComponent(plugin.value.widget.component) : undefined);
 const enabled = computed(() => pluginRuntime.states[props.pluginId]?.enabled ?? false);

@@ -3,15 +3,11 @@
 -->
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { useAiChat } from '../composables/useAiChat';
+import { computed } from 'vue';
 import { pluginNavigation } from '../composables/usePluginNavigation';
 import type { Component } from 'vue';
 import {
-  Bot,
   Home,
-  PanelLeftClose,
-  PanelLeftOpen,
   Puzzle,
   Settings,
   Wrench,
@@ -40,8 +36,7 @@ const navItems = computed(() => [
   })),
   ...utilityItems.map((item) => ({ ...item, id: item.path, to: item.path })),
 ]);
-const collapsed = ref(false);
-const { open: openAiChat, opened: aiChatOpened } = useAiChat();
+defineProps<{ collapsed: boolean }>();
 </script>
 
 <template>
@@ -75,39 +70,6 @@ const { open: openAiChat, opened: aiChatOpened } = useAiChat();
       </RouterLink>
     </nav>
 
-    <div class="footer">
-      <button
-        type="button"
-        class="collapse-btn"
-        title="AI 聊天"
-        :aria-expanded="aiChatOpened"
-        aria-haspopup="dialog"
-        @click="openAiChat"
-      >
-        <Bot :size="18" />
-        <span
-          v-show="!collapsed"
-          class="collapse-label"
-        >AI 聊天</span>
-      </button>
-      <button
-        type="button"
-        class="collapse-btn"
-        :title="collapsed ? '展开侧栏' : '折叠侧栏'"
-        :aria-expanded="!collapsed"
-        @click="collapsed = !collapsed"
-      >
-        <component
-          :is="collapsed ? PanelLeftOpen : PanelLeftClose"
-          :size="17"
-          :stroke-width="1.7"
-        />
-        <span
-          v-show="!collapsed"
-          class="collapse-label"
-        >折叠侧栏</span>
-      </button>
-    </div>
   </aside>
 </template>
 
@@ -217,7 +179,8 @@ const { open: openAiChat, opened: aiChatOpened } = useAiChat();
 /* Collapsed: center the icons, drop the labels. */
 .sidebar.collapsed .nav-item,
 .sidebar.collapsed .collapse-btn {
-  justify-content: center;
-  padding: 0;
+  /* 保持图标的左侧基线，折叠宽度变化时不会横向跳动。 */
+  justify-content: flex-start;
+  padding: 0 10px;
 }
 </style>

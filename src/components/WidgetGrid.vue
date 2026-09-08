@@ -10,10 +10,12 @@ import PluginWidgetHost from './PluginWidgetHost.vue';
 
 const columns = 12;
 const gap = 12;
-type WidgetItem = { id: string; x: number; y: number; w: number; h: number; pinned: boolean };
+/** id 是实例 ID，pluginId 决定加载哪个插件；同一插件可创建多个实例。 */
+type WidgetItem = { id: string; pluginId: string; x: number; y: number; w: number; h: number; pinned: boolean };
 const widgetPlugins = pluginRuntime.enabledWidgets;
 const defaults: WidgetItem[] = widgetPlugins.value.map((plugin, index) => ({
   id: plugin.id,
+  pluginId: plugin.id,
   x: (index % 2) * 6,
   y: Math.floor(index / 2) * 2,
   w: plugin.widget?.defaultWidth ?? 6,
@@ -30,13 +32,13 @@ const cellWidth = 88;
 const cellHeight = 66;
 let deferredWidgets: ReturnType<typeof setTimeout> | undefined;
 
-const pluginFor = (id: string) => widgetPlugins.value.find((plugin) => plugin.id === id);
-const minSizeFor = (id: string) => {
-  const widget = pluginFor(id)?.widget;
+const pluginFor = (pluginId: string) => widgetPlugins.value.find((plugin) => plugin.id === pluginId);
+const minSizeFor = (pluginId: string) => {
+  const widget = pluginFor(pluginId)?.widget;
   return { width: widget?.minWidth ?? 3, height: widget?.minHeight ?? 2 };
 };
 const normalizeItem = (item: WidgetItem): WidgetItem => {
-  const minimum = minSizeFor(item.id);
+  const minimum = minSizeFor(item.pluginId);
   const width = Math.max(minimum.width, Math.min(columns, item.w));
   return {
     ...item,
@@ -53,19 +55,21 @@ const styleFor = (item: WidgetItem) => ({
   height: `${item.h * cellHeight + (item.h - 1) * gap}px`,
 });
 const gridHeight = computed(() => Math.max(1, ...items.value.map((item) => item.y + item.h)));
-const availablePlugins = computed(() => widgetPlugins.value.filter((plugin) => !items.value.some((item) => item.id === plugin.id)));
+// 当前每个插件只有一个默认 Widget，因此同一插件只能添加一次。
+// 扩展为 widgets[] 后，这里会改为按 pluginId + widgetId 判断。
+const availablePlugins = computed(() => widgetPlugins.value.filter((plugin) => !items.value.some((item) => item.pluginId === plugin.id)));
 const gridStyle = computed(() => ({
   height: `${gridHeight.value * cellHeight + Math.max(0, gridHeight.value - 1) * gap}px`,
 }));
 
 const save = () => localStorage.setItem(storageKey, JSON.stringify(items.value));
 const reset = () => { items.value = defaults.map((item) => ({ ...item })); save(); };
-const addWidget = (id: string) => {
-  const plugin = pluginFor(id);
+const addWidget = (pluginId: string) => {
+  const plugin = pluginFor(pluginId);
   if (!plugin?.widget) return;
-  const minimum = minSizeFor(id);
+  const minimum = minSizeFor(pluginId);
   const nextY = Math.max(0, ...items.value.map((item) => item.y + item.h));
-  items.value.push({ id, x: 0, y: nextY, w: Math.max(minimum.width, plugin.widget.defaultWidth), h: Math.max(minimum.height, plugin.widget.defaultHeight), pinned: false });
+  items.value.push({ id: crypto.randomUUID(), pluginId, x: 0, y: nextY, w: Math.max(minimum.width, plugin.widget.defaultWidth), h: Math.max(minimum.height, plugin.widget.defaultHeight), pinned: false });
   save();
   showLibrary.value = false;
 };
@@ -89,7 +93,7 @@ const move = (event: PointerEvent) => {
     item.x = Math.max(0, Math.min(columns - item.w, active.value.item.x + dx));
     item.y = Math.max(0, active.value.item.y + dy);
   } else {
-    const minimum = minSizeFor(item.id);
+    const minimum = minSizeFor(item.pluginId);
     item.w = Math.max(minimum.width, Math.min(columns - item.x, active.value.item.w + dx));
     item.h = Math.max(minimum.height, active.value.item.h + dy);
   }
@@ -114,7 +118,9 @@ onMounted(() => {
     const parsed = JSON.parse(stored) as WidgetItem[];
     if (Array.isArray(parsed) && parsed.every((item) => item.id && item.w && item.h)) {
       items.value = parsed
-        .filter((item) => pluginFor(item.id))
+        .map((item) => ({ ...item, pluginId: item.pluginId ?? item.id, id: item.pluginId ? item.id : crypto.randomUUID() }))
+        .filter((item) => pluginFor(item.pluginId))
+        .filter((item, index, list) => list.findIndex((other) => other.pluginId === item.pluginId) === index)
         .map(normalizeItem);
     }
   } catch { /* Ignore an invalid local layout. */ }
@@ -158,7 +164,7 @@ onBeforeUnmount(() => clearTimeout(deferredWidgets));
         :style="styleFor(item)"
       >
         <div v-if="!item.pinned" class="widget-drag" title="拖动 Widget" @pointerdown="begin($event, item, 'drag')"><Grip :size="15" /></div>
-        <PluginWidgetHost :plugin-id="item.id" />
+        <PluginWidgetHost :plugin-id="item.pluginId" :instance-id="item.id" />
         <span
           v-if="active?.id === item.id && active.mode === 'resize'"
           class="size-indicator"

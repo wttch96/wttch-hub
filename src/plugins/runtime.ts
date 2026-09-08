@@ -58,7 +58,8 @@ for (const plugin of allTools) {
   states[plugin.id] = { enabled: persisted.enabled?.[plugin.id] ?? true, status: 'disabled', activeScopes: 0 };
   values[plugin.id] = {};
   for (const field of plugin.settings?.fields ?? []) values[plugin.id][field.key] = persisted.values?.[plugin.id]?.[field.key] ?? field.defaultValue;
-  storage[plugin.id] = persisted.storage?.[plugin.id] ?? {};
+  // Electron 下优先使用每插件独立 data.json；浏览器预览仍回退到 localStorage。
+  storage[plugin.id] = window.pluginStorageHost?.read(plugin.id) ?? persisted.storage?.[plugin.id] ?? {};
 }
 
 const save = () => localStorage.setItem(persistenceKey, JSON.stringify({
@@ -67,6 +68,9 @@ const save = () => localStorage.setItem(persistenceKey, JSON.stringify({
   values: { ...persisted.values, ...values },
   storage: { ...persisted.storage, ...storage },
 }));
+const savePluginStorage = (pluginId: string) => {
+  void window.pluginStorageHost?.write(pluginId, { ...storage[pluginId] });
+};
 // Electron floating widgets run in a separate renderer. Keep settings and
 // plugin-private data synchronized through the shared localStorage origin.
 window.addEventListener('storage', (event) => {
@@ -118,7 +122,7 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
     data: createPluginDataApi(plugin.id, () => storage[plugin.id], (next) => {
       const previous = storage[plugin.id];
       storage[plugin.id] = next;
-      try { save(); } catch (error) { storage[plugin.id] = previous; throw error; }
+      try { save(); savePluginStorage(plugin.id); } catch (error) { storage[plugin.id] = previous; throw error; }
       // 写入成功才广播，含已删除字段，确保页面与 Widget 都能清理旧内容。
       const keys = new Set([...Object.keys(previous), ...Object.keys(next)]);
       keys.forEach(key => pluginStorageListeners.forEach(listener => listener(key, next[key])));
@@ -133,8 +137,9 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
         : Promise.reject(new Error(`插件 ${plugin.id} 未声明 notifications 能力`)),
       openFloatingWidget: (options) => plugin.capabilities?.floatingWidget && plugin.floatingWidget && window.toolHost?.openFloatingWidget
         ? window.toolHost.openFloatingWidget(plugin.id, {
-            width: options?.width ?? plugin.floatingWidget.defaultWidth,
-            height: options?.height ?? plugin.floatingWidget.defaultHeight,
+          width: options?.width ?? plugin.floatingWidget.defaultWidth,
+          height: options?.height ?? plugin.floatingWidget.defaultHeight,
+          id: options?.id,
             alwaysOnTop: options?.alwaysOnTop,
             locked: options?.locked,
           })
@@ -142,9 +147,12 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
       updateFloatingWidget: (options) => plugin.capabilities?.floatingWidget && window.toolHost?.updateFloatingWidget
         ? window.toolHost.updateFloatingWidget(plugin.id, options)
         : Promise.reject(new Error(`插件 ${plugin.id} 未声明 floatingWidget 能力`)),
-      closeFloatingWidget: () => plugin.capabilities?.floatingWidget && window.toolHost?.closeFloatingWidget
-        ? window.toolHost.closeFloatingWidget(plugin.id)
+      closeFloatingWidget: (id) => plugin.capabilities?.floatingWidget && window.toolHost?.closeFloatingWidget
+        ? window.toolHost.closeFloatingWidget(plugin.id, id)
         : Promise.reject(new Error(`插件 ${plugin.id} 未声明 floatingWidget 能力`)),
+      showWorkbench: () => window.toolHost?.showWorkbench
+        ? window.toolHost.showWorkbench()
+        : Promise.reject(new Error('当前环境无法打开工作台')),
     },
     settings: {
       get: <T extends SettingValue>(key: string, fallback?: T) => (values[plugin.id]?.[key] as T | undefined) ?? fallback,
@@ -153,8 +161,8 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
     },
     storage: {
       get: <T>(key: string, fallback?: T) => (storage[plugin.id]?.[key] as T | undefined) ?? fallback,
-      update: (key, value) => { storage[plugin.id][key] = value; save(); pluginStorageListeners.forEach((listener) => listener(key, value)); },
-      delete: (key) => { delete storage[plugin.id][key]; save(); pluginStorageListeners.forEach((listener) => listener(key, undefined)); },
+      update: (key, value) => { storage[plugin.id][key] = value; save(); savePluginStorage(plugin.id); pluginStorageListeners.forEach((listener) => listener(key, value)); },
+      delete: (key) => { delete storage[plugin.id][key]; save(); savePluginStorage(plugin.id); pluginStorageListeners.forEach((listener) => listener(key, undefined)); },
       onDidChange: (listener) => { pluginStorageListeners.add(listener); return { dispose: () => pluginStorageListeners.delete(listener) }; },
     },
     ui: {
