@@ -14,7 +14,7 @@ import type {
   ToolPlugin,
 } from '@wttch-hub/plugin-api';
 import { aiFailure } from './shared';
-import { registerAiTool } from './tools';
+import { registry } from './callTools';
 
 /** 将已通过可用性检查的宿主桥接对象交给具体业务操作执行。 */
 type AiAction<T> = (host: AiBridge) => Promise<AiResult<T>>;
@@ -73,7 +73,7 @@ export class PluginAiApiClient implements PluginAiApi {
     // 工具注册会影响全局工具表，未授权插件必须保持无副作用。
     if (!this.isAllowed()) return this.emptyDisposable();
 
-    const registration = registerAiTool(tool);
+    const registration = registry.register(tool);
     // 插件卸载时，运行时会遍历 subscriptions，借此自动注销工具。
     return this.trackDisposable(registration);
   };

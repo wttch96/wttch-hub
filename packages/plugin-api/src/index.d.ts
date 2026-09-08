@@ -29,7 +29,9 @@ export type SystemStats = {
 };
 
 export type PluginNotification = {
+  /** 通知标题；宿主会限制长度并负责平台兼容性。 */
   title: string;
+  /** 可选补充说明；不应包含密钥等敏感信息。 */
   body?: string;
   silent?: boolean;
 };
@@ -44,6 +46,10 @@ export type FloatingWidgetWindowOptions = {
 };
 
 export interface ToolHostApi {
+  /**
+   * 宿主能力的最小受控入口。插件不得直接访问 Electron、Node.js 或通用 IPC；
+   * 每个方法都会在运行时按插件声明的 capabilities 再次校验。
+   */
   /** 请求一次最新系统统计数据。 */
   systemStats(): Promise<SystemStats>;
   /** 通过主进程显示一条系统桌面通知。 */
@@ -59,6 +65,13 @@ export interface ToolHostApi {
 }
 
 export type MaybePromise<T> = T | Promise<T>;
+/**
+ * 可显式释放的资源句柄。常用于事件订阅、工具注册和临时扩展。
+ *
+ * 插件应将长生命周期资源 push 到 activation context 的 subscriptions 中，
+ * 宿主会在插件卸载、禁用或出错时调用 dispose。这里使用 dispose() 而非
+ * Symbol.dispose：资源的释放时机是插件生命周期，而不是 JavaScript 词法作用域。
+ */
 export interface Disposable {
   dispose(): void;
 }
@@ -69,12 +82,17 @@ export type PluginDeactivationReason =
   'route' | 'widget' | 'floating-widget' | 'disabled' | 'uninstalled' | 'shutdown' | 'error';
 
 export interface PluginSettingsApi {
+  /** 读取插件清单声明的简单设置；未设置时返回 fallback。 */
   get<T extends boolean | number | string>(key: string, fallback?: T): T | undefined;
   update(key: string, value: boolean | number | string): void;
   onDidChange(listener: (key: string, value: boolean | number | string) => void): Disposable;
 }
 
 export interface PluginStorageApi {
+  /**
+   * 插件私有键值存储。宿主按 pluginId 隔离数据，并在桌面端保存到
+   * plugin-data/<pluginId>/data.json；未来可替换为 OSS 同步实现而不改变插件 API。
+   */
   get<T>(key: string, fallback?: T): T | undefined;
   update<T>(key: string, value: T): void;
   delete(key: string): void;
@@ -123,6 +141,7 @@ export interface PluginServicesApi {
 }
 
 export interface PluginUiApi {
+  /** 仅在宿主应用内展示短暂提示，不等同于系统级通知。 */
   showToast(message: string, kind?: 'info' | 'success' | 'error', duration?: number): number;
   dismissToast(id: number): void;
   openSheet(options: {

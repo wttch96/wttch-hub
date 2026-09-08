@@ -58,8 +58,12 @@ for (const plugin of allTools) {
   states[plugin.id] = { enabled: persisted.enabled?.[plugin.id] ?? true, status: 'disabled', activeScopes: 0 };
   values[plugin.id] = {};
   for (const field of plugin.settings?.fields ?? []) values[plugin.id][field.key] = persisted.values?.[plugin.id]?.[field.key] ?? field.defaultValue;
-  // Electron 下优先使用每插件独立 data.json；浏览器预览仍回退到 localStorage。
-  storage[plugin.id] = window.pluginStorageHost?.read(plugin.id) ?? persisted.storage?.[plugin.id] ?? {};
+  // 新建悬浮窗可能早于异步文件落盘启动；空文件数据要回退到共享 localStorage，
+  // 否则刚触发的倒计时提醒会在浮窗中丢失。
+  const fileStorage = window.pluginStorageHost?.read(plugin.id);
+  storage[plugin.id] = fileStorage && Object.keys(fileStorage).length
+    ? fileStorage
+    : persisted.storage?.[plugin.id] ?? {};
 }
 
 const save = () => localStorage.setItem(persistenceKey, JSON.stringify({

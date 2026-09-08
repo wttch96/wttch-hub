@@ -3,12 +3,22 @@
  */
 
 import { reactive, readonly } from 'vue';
-import type { AiChatRequest, AiCompletion, AiResult, AiStatus, Disposable } from '@wttch-hub/plugin-api';
-import type { AiConfigurationUpdate } from '../ai/contracts';
-import { aiFailure, DEFAULT_AI_STATUS } from '../ai/shared';
-import { invokeRegisteredAiTool, registeredAiToolDefinitions } from '../ai/tools';
+import type {
+  AiChatRequest,
+  AiCompletion,
+  AiResult,
+  AiStatus,
+  Disposable,
+} from '@wttch-hub/plugin-api';
+import type { AiConfigurationUpdate } from '@/ai/contracts';
+import { aiFailure, DEFAULT_AI_STATUS } from '@/ai/shared';
+import { runLangChainAgent } from '@/ai/langchainAdapter';
 
-const state = reactive({ status: { ...DEFAULT_AI_STATUS }, available: Boolean(window.aiHost), loading: false });
+const state = reactive({
+  status: { ...DEFAULT_AI_STATUS },
+  available: Boolean(window.aiHost),
+  loading: false,
+});
 let subscription: Disposable | undefined;
 let refreshTask: Promise<void> | undefined;
 
@@ -16,49 +26,58 @@ const refresh = () => {
   if (refreshTask) return refreshTask;
   refreshTask = (async () => {
     const host = window.aiHost;
-    if (!host) { state.available = false; return; }
-    if (!subscription) subscription = host.onDidChange((status) => { state.status = status; });
+    if (!host) {
+      state.available = false;
+      return;
+    }
+    if (!subscription)
+      subscription = host.onDidChange(status => {
+        state.status = status;
+      });
     state.loading = true;
     try {
       const result = await host.getStatus();
       state.available = true;
       if (result.ok === true) state.status = result.value;
-    } catch { state.available = false; }
-    finally { state.loading = false; }
-  })().finally(() => { refreshTask = undefined; });
+    } catch {
+      state.available = false;
+    } finally {
+      state.loading = false;
+    }
+  })().finally(() => {
+    refreshTask = undefined;
+  });
   return refreshTask;
 };
 
 const invoke = async <T>(action: () => Promise<AiResult<T>>): Promise<AiResult<T>> => {
   if (!window.aiHost) return aiFailure('UNAVAILABLE', '请在桌面应用中配置和使用 AI。');
-  try { return await action(); } catch { return aiFailure('UNAVAILABLE', '宿主 AI 服务暂时不可用。', true); }
+  try {
+    return await action();
+  } catch {
+    return aiFailure('UNAVAILABLE', '宿主 AI 服务暂时不可用。', true);
+  }
 };
 
 export const useAiService = () => ({
-  state: readonly(state), refresh,
+  state: readonly(state),
+  refresh,
   async configure(input: AiConfigurationUpdate): Promise<AiResult<AiStatus>> {
     const result = await invoke(() => window.aiHost!.configure(input));
     if (result.ok === true) state.status = result.value;
     return result;
   },
   async chat(request: AiChatRequest): Promise<AiResult<AiCompletion>> {
-    // 工具在渲染器执行，因而只能操作自己已获授权的插件状态；主进程只处理模型与密钥。
-    let messages = [...request.messages];
-    const tools = request.tools ?? registeredAiToolDefinitions();
-    for (let round = 0; round < 8; round += 1) {
-      const result = await invoke(() => window.aiHost!.chat('builtin-chat', { ...request, messages, ...(tools.length ? { tools } : {}) }));
-      if (result.ok === false || !result.value.toolCalls?.length) return result;
-      messages.push({ role: 'assistant', content: result.value.content, toolCalls: result.value.toolCalls });
-      for (const call of result.value.toolCalls) {
-        try { messages.push({ role: 'tool', toolCallId: call.id, content: JSON.stringify(await invokeRegisteredAiTool(call)) }); }
-        catch (error) { messages.push({ role: 'tool', toolCallId: call.id, content: JSON.stringify({ error: error instanceof Error ? error.message : '工具调用失败' }) }); }
-      }
-    }
-    return aiFailure('BUSY', 'AI 工具调用轮次过多，已停止执行。', true);
+    return runLangChainAgent(request);
   },
-  test: (requestId: string): Promise<AiResult<AiCompletion>> => invoke(() => window.aiHost!.test('settings', requestId)),
+  test: (requestId: string): Promise<AiResult<AiCompletion>> =>
+    invoke(() => window.aiHost!.test('settings', requestId)),
   async cancel(owner: 'builtin-chat' | 'settings', requestId: string) {
-    try { return await window.aiHost?.cancel(owner, requestId) ?? false; } catch { return false; }
+    try {
+      return (await window.aiHost?.cancel(owner, requestId)) ?? false;
+    } catch {
+      return false;
+    }
   },
 });
 if (import.meta.hot) import.meta.hot.dispose(() => subscription?.dispose());
