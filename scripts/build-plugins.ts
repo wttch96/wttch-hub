@@ -3,7 +3,7 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import type { PluginPackageDefinition } from '../src/types/plugin';
 
@@ -19,6 +19,7 @@ const build = async () => {
   const ids = readdirSync(sourceRoot).sort()
     .filter((name) => name !== 'examples' && name !== '.generated')
     .filter((name) => statSync(path.join(sourceRoot, name)).isDirectory());
+  console.log(`[plugins:build] discovered ${ids.length} plugin source directories: ${ids.join(', ') || '(none)'}`);
   for (const id of ids) {
     const directory = path.join(sourceRoot, id);
     const manifestPath = path.join(directory, 'package.ts');
@@ -29,14 +30,17 @@ const build = async () => {
     }
     const npmPackage = JSON.parse(readFileSync(npmPackagePath, 'utf8')) as { scripts?: Record<string, string> };
     if (!npmPackage.scripts?.build || !npmPackage.scripts.test) throw new Error(`${id}: package.json 必须提供 build 和 test 脚本。`);
-    const definition = (await import(manifestPath)).default as PluginPackageDefinition;
+    const definition = (await import(pathToFileURL(manifestPath).href)).default as PluginPackageDefinition;
     if (definition.id !== id || definition.apiVersion !== 1 || definition.entry !== 'index.ts') {
       throw new Error(`${id}: package.ts 的 id、apiVersion 或 entry 不符合宿主协议。`);
     }
     plugins.push(definition);
+    console.log(`[plugins:build] ✓ ${id} v${definition.version} (${definition.name})`);
   }
   mkdirSync(outputRoot, { recursive: true });
-  writeFileSync(path.join(outputRoot, 'plugins.json'), `${JSON.stringify({ apiVersion: 1, plugins }, null, 2)}\n`);
+  const manifest = path.join(outputRoot, 'plugins.json');
+  writeFileSync(manifest, `${JSON.stringify({ apiVersion: 1, plugins }, null, 2)}\n`);
+  console.log(`[plugins:build] wrote manifest: ${path.relative(root, manifest)} (${plugins.length} plugins)`);
   console.log(`已构建 ${plugins.length} 个插件清单；Vue/TypeScript 页面将由工作台 Vite 构建一并编译。`);
 };
 

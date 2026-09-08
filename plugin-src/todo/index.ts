@@ -6,7 +6,6 @@ import { ListTodo } from 'lucide-vue-next';
 import { defineToolPlugin, type PluginComponentApi } from '@wttch-hub/plugin-api';
 import { connectTodoStore, disconnectTodoStore } from './store';
 import { addTodo, moveTodo, removeTodo, todoState } from './store';
-import { registerAiTool } from '../../src/ai/tools';
 
 type ThemeExtension = {
   registerColor(key: string, defaultValue: string, description?: string): { dispose(): void };
@@ -37,7 +36,7 @@ export default defineToolPlugin({
     load(context) {
       connectTodoStore(context as PluginComponentApi);
       const aiTools = [
-        registerAiTool({
+        context.ai.registerTool({
           name: 'todo_add', description: '新增一条待办。laneId 省略时放入待处理泳道。',
           parameters: { type: 'object', properties: { title: { type: 'string' }, body: { type: 'string' }, dueAt: { type: 'string' }, priority: { type: 'string', enum: ['low', 'normal', 'high'] }, laneId: { type: 'string' } }, required: ['title'], additionalProperties: false },
           invoke: (args) => {
@@ -47,12 +46,12 @@ export default defineToolPlugin({
             return todoState.items.at(-1);
           },
         }),
-        registerAiTool({
+        context.ai.registerTool({
           name: 'todo_list', description: '查看当前待办和泳道，用于确认可操作的待办 ID、泳道 ID 与状态。',
           parameters: { type: 'object', properties: {}, additionalProperties: false },
           invoke: () => ({ lanes: todoState.lanes, items: todoState.items }),
         }),
-        registerAiTool({
+        context.ai.registerTool({
           name: 'todo_delete', description: '按待办 ID 删除一条待办。',
           parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false },
           invoke: (args) => {
@@ -60,7 +59,7 @@ export default defineToolPlugin({
             removeTodo(args.id); return { deleted: args.id };
           },
         }),
-        registerAiTool({
+        context.ai.registerTool({
           name: 'todo_move', description: '把待办移动到指定泳道；可选 beforeId 将它放到另一待办之前。',
           parameters: { type: 'object', properties: { id: { type: 'string' }, laneId: { type: 'string' }, beforeId: { type: 'string' } }, required: ['id', 'laneId'], additionalProperties: false },
           invoke: (args) => {

@@ -51,7 +51,7 @@ interface Window {
     closeFloatingWidget(pluginId: string): Promise<boolean>;
     pluginPackages(): Promise<import('./types/plugin').PluginPackageInfo[]>;
     installPluginPackage(): Promise<import('./types/plugin').PluginInstallResult>;
-    removePluginPackage(file: string): Promise<import('./types/plugin').PluginPackageInfo[]>;
+    removePluginPackage(input: Pick<import('./types/plugin').PluginPackageInfo, 'file' | 'source'>): Promise<import('./types/plugin').PluginPackageInfo[]>;
   };
   /** Electron 中的插件开发日志桥；仅由 @wttch-hub/plugin-debug 消费。 */
   pluginDebugHost?: {

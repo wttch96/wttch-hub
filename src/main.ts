@@ -271,10 +271,14 @@ ipcMain.handle(IPC.pluginInstall, async () => {
   if (path.resolve(source) !== path.resolve(destination)) fs.copyFileSync(source, destination);
   return { installed: readPluginPackage(destination, { source: 'managed', removable: true }) };
 });
-ipcMain.handle(IPC.pluginRemove, (_event, file: string) => {
-  const managedDirectory = pluginDirectories()[0].directory;
-  const target = path.join(managedDirectory, path.basename(file));
-  if (path.dirname(target) !== managedDirectory || !target.endsWith('.zip')) throw new Error('无效的插件包路径');
+ipcMain.handle(IPC.pluginRemove, (_event, input: { file?: unknown; source?: unknown }) => {
+  const file = typeof input?.file === 'string' ? input.file : '';
+  const source = input?.source;
+  if (source !== 'managed' && source !== 'sandbox') throw new Error('该插件包来源不可删除');
+  const location = pluginDirectories().find((item) => item.source === source && item.removable);
+  if (!location) throw new Error('找不到可删除的插件包目录');
+  const target = path.join(location.directory, path.basename(file));
+  if (path.dirname(target) !== location.directory || !target.endsWith('.zip')) throw new Error('无效的插件包路径');
   if (fs.existsSync(target)) fs.unlinkSync(target);
   return loadPluginPackages();
 });

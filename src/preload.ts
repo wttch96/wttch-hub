@@ -55,7 +55,7 @@ contextBridge.exposeInMainWorld('toolHost', {
   closeFloatingWidget: toolHost.closeFloatingWidget,
   pluginPackages: () => ipcRenderer.invoke('plugins:list'),
   installPluginPackage: () => ipcRenderer.invoke('plugins:install'),
-  removePluginPackage: (file: string) => ipcRenderer.invoke('plugins:remove', file),
+  removePluginPackage: (input: { file: string; source?: 'managed' | 'sandbox' | 'workspace' }) => ipcRenderer.invoke('plugins:remove', input),
 });
 
 // 调试日志只有固定的单向通道；不向插件暴露 ipcRenderer 或任意主进程能力。

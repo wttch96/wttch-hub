@@ -3,7 +3,7 @@
 -->
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { Check, ChevronRight, Package, Settings2, Power, PowerOff, Trash2, Upload } from 'lucide-vue-next';
 import { RouterLink } from 'vue-router';
 import { allTools as tools } from '../config/tools';
@@ -51,12 +51,20 @@ const install = async () => {
 const removePackage = async (pkg: PluginPackageInfo) => {
   if (!pkg.removable || !window.toolHost || !window.confirm(`确定删除插件包“${pkg.file}”吗？`)) return;
   busy.value = true;
+  const removedIds = packages.value
+    .filter((item) => item.file === pkg.file && item.source === pkg.source && item.removable)
+    .map((item) => item.id)
+    .filter((id) => tools.some((tool) => tool.id === id));
+  const previouslyEnabled = removedIds.filter((id) => pluginRuntime.states[id]?.enabled);
   try {
-    const removedIds = packages.value.filter((item) => item.file === pkg.file && item.removable).map((item) => item.id);
-    packages.value = await window.toolHost.removePluginPackage(pkg.file);
-    await Promise.all(removedIds.filter((id) => tools.some((tool) => tool.id === id)).map((id) => pluginRuntime.setEnabled(id, false)));
+    await Promise.all(removedIds.map((id) => pluginRuntime.setEnabled(id, false)));
+    await nextTick();
+    packages.value = await window.toolHost.removePluginPackage({ file: pkg.file, source: pkg.source });
     toast.success('插件包已删除');
-  } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+  } catch (error) {
+    await Promise.all(previouslyEnabled.map((id) => pluginRuntime.setEnabled(id, true)));
+    toast.error(error instanceof Error ? error.message : String(error));
+  }
   finally { busy.value = false; }
 };
 const toggle = (id: string) => pluginRuntime.setEnabled(id, !pluginRuntime.states[id]?.enabled);

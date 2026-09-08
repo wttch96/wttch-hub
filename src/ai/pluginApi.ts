@@ -5,6 +5,7 @@
 import type { AiBridge } from './contracts';
 import type { AiResult, Disposable, PluginAiApi, ToolPlugin } from '@wttch-hub/plugin-api';
 import { aiFailure } from './shared';
+import { registerAiTool } from './tools';
 
 /**
  * 每个插件获得独立 owner 与默认生成参数。能力校验每次调用时执行，
@@ -40,6 +41,19 @@ export const createPluginAiApi = (plugin: ToolPlugin, enabled: () => boolean, br
       const options = { ...plugin.ai, ...Object.fromEntries(Object.entries(request).filter(([, value]) => value !== undefined)), requestId };
       return track(host, requestId, () => host.chat(owner, options as typeof request));
     }),
+    registerTool: (tool) => {
+      if (!plugin.capabilities?.ai || !enabled()) {
+        return { dispose() { /* AI capability is not available for this plugin. */ } };
+      }
+      const registration = registerAiTool(tool);
+      const owned = { dispose() {
+        registration.dispose();
+        const index = subscriptions.indexOf(owned);
+        if (index >= 0) subscriptions.splice(index, 1);
+      } };
+      subscriptions.push(owned);
+      return owned;
+    },
     // 已发出的请求允许在禁用后取消；owner 仍固定为当前插件，不能取消其他调用方的请求。
     cancel: async (requestId) => {
       if (!plugin.capabilities?.ai) return false;

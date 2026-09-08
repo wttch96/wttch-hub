@@ -62,22 +62,51 @@ export default defineToolPlugin({
   settings: {
     description: '选择预设主题，或调整任意颜色自动切换到自定义主题。',
     fields: [
-      { key: 'preset', label: '主题预设', type: 'select', defaultValue: 'ocean', options: [
-        { label: '海洋蓝', value: 'ocean' }, { label: '星云紫', value: 'violet' },
-        { label: '森林绿', value: 'forest' }, { label: '日落橙', value: 'sunset' },
-        { label: '午夜黑', value: 'midnight' }, { label: '自定义', value: 'custom' },
-      ] },
-      { key: 'scheme', label: '界面明暗', type: 'select', defaultValue: 'light', options: [{ label: '浅色', value: 'light' }, { label: '深色', value: 'dark' }] },
-      ...colorFields.map(([key, label, defaultValue]) => ({ key, label, type: 'color' as const, defaultValue })),
+      {
+        key: 'preset',
+        label: '主题预设',
+        type: 'select',
+        defaultValue: 'ocean',
+        options: [
+          { label: '海洋蓝', value: 'ocean' },
+          { label: '星云紫', value: 'violet' },
+          { label: '森林绿', value: 'forest' },
+          { label: '日落橙', value: 'sunset' },
+          { label: '午夜黑', value: 'midnight' },
+          { label: '自定义', value: 'custom' },
+        ],
+      },
+      {
+        key: 'scheme',
+        label: '界面明暗',
+        type: 'select',
+        defaultValue: 'light',
+        options: [
+          { label: '浅色', value: 'light' },
+          { label: '深色', value: 'dark' },
+        ],
+      },
+      ...colorFields.map(([key, label, defaultValue]) => ({
+        key,
+        label,
+        type: 'color' as const,
+        defaultValue,
+      })),
     ],
   },
   events: {
     load(context) {
       render(context.settings);
       const extension = createThemeExtension(context.storage, context.settings);
-      const defaultRegistrations = defaultThemeColors.map(([key, settingKey, description]) => extension.registerThemeColor(key, settingKey, description));
+      const defaultRegistrations = defaultThemeColors.map(([key, settingKey, description]) =>
+        extension.registerThemeColor(key, settingKey, description),
+      );
       const registration = context.extensions.registerExtension(extension);
-      return () => { defaultRegistrations.forEach(item => item.dispose()); registration.dispose(); resetTheme(); };
+      return () => {
+        defaultRegistrations.forEach(item => item.dispose());
+        registration.dispose();
+        resetTheme();
+      };
     },
     settingsChanged(context, key) {
       if (key === 'preset') {

@@ -149,6 +149,7 @@ export const createPluginDebugHost = (options: PluginDebugHostOptions) => {
       getStatus: async () => ({ ok: true, value: status }),
       test: async () => notConfigured(),
       chat: async () => notConfigured(),
+      registerTool: () => disposable(() => undefined),
       cancel: async () => false,
       onDidChange: () => disposable(() => undefined),
     },

@@ -55,11 +55,14 @@ export interface ToolHostApi {
 }
 
 export type MaybePromise<T> = T | Promise<T>;
-export interface Disposable { dispose(): void; }
+export interface Disposable {
+  dispose(): void;
+}
 /** 插件回调可返回清理函数或 VS Code 风格的 Disposable。 */
 export type PluginCleanup = (() => MaybePromise<void>) | Disposable;
 export type PluginActivationReason = 'startup' | 'route' | 'widget' | 'floating-widget' | 'manual';
-export type PluginDeactivationReason = 'route' | 'widget' | 'floating-widget' | 'disabled' | 'uninstalled' | 'shutdown' | 'error';
+export type PluginDeactivationReason =
+  'route' | 'widget' | 'floating-widget' | 'disabled' | 'uninstalled' | 'shutdown' | 'error';
 
 export interface PluginSettingsApi {
   get<T extends boolean | number | string>(key: string, fallback?: T): T | undefined;
@@ -98,7 +101,13 @@ export interface PluginDataApi {
 
 /** 插件发布的服务结果；id 是业务事件的稳定 ID，用于当前进程内去重。 */
 export type ServiceOutput = { id: string; title: string; text: string };
-export type ServicePublishResult = { accepted: boolean; sent: number; failed: number; skipped: number; error?: string };
+export type ServicePublishResult = {
+  accepted: boolean;
+  sent: number;
+  failed: number;
+  skipped: number;
+  error?: string;
+};
 /**
  * 插件只发布自己声明的服务结果，不选择微信收件人，也不读取微信凭据。
  * 用户在宿主设置中创建服务订阅后才向相应会话分发；没有订阅时跳过发送。
@@ -112,7 +121,11 @@ export interface PluginServicesApi {
 export interface PluginUiApi {
   showToast(message: string, kind?: 'info' | 'success' | 'error', duration?: number): number;
   dismissToast(id: number): void;
-  openSheet(options: { title?: string; component?: Component; props?: Record<string, unknown> }): void;
+  openSheet(options: {
+    title?: string;
+    component?: Component;
+    props?: Record<string, unknown>;
+  }): void;
   closeSheet(): void;
 }
 
@@ -143,21 +156,50 @@ export interface PluginDebugApi {
  * 提供者应在 load 中 registerExtension，并在 unload 时由宿主自动撤销。
  */
 export interface PluginExtensionsApi {
+  /**
+   * 注册
+   * @param extension
+   */
   registerExtension<T extends object>(extension: T): Disposable;
   getExtension<T extends object>(pluginId: string): T | undefined;
 }
 
 /** AI 的可诊断错误码；插件应按 code 分支处理，不依赖服务商的英文错误文本。 */
-export type AiErrorCode = 'NOT_CONFIGURED' | 'DISABLED' | 'FORBIDDEN' | 'INVALID_REQUEST'
-  | 'AUTH' | 'RATE_LIMIT' | 'TIMEOUT' | 'CANCELLED' | 'NETWORK' | 'PROVIDER'
-  | 'INVALID_RESPONSE' | 'STORAGE' | 'UNAVAILABLE' | 'BUSY';
+export type AiErrorCode =
+  | 'NOT_CONFIGURED'
+  | 'DISABLED'
+  | 'FORBIDDEN'
+  | 'INVALID_REQUEST'
+  | 'AUTH'
+  | 'RATE_LIMIT'
+  | 'TIMEOUT'
+  | 'CANCELLED'
+  | 'NETWORK'
+  | 'PROVIDER'
+  | 'INVALID_RESPONSE'
+  | 'STORAGE'
+  | 'UNAVAILABLE'
+  | 'BUSY';
 export type AiError = { code: AiErrorCode; message: string; retryable: boolean; status?: number };
 /** 使用普通可序列化对象跨 IPC 返回错误，避免 Electron 丢失自定义 Error 的属性。 */
 export type AiResult<T> = { ok: true; value: T } | { ok: false; error: AiError };
 /** OpenAI-compatible function declaration, kept serializable for the IPC boundary. */
-export type AiToolDefinition = { name: string; description: string; parameters: Record<string, unknown> };
+export type AiToolDefinition = {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+};
+/** A renderer-side implementation for a tool declared to the AI provider. */
+export type AiToolRegistration = AiToolDefinition & {
+  invoke(args: Record<string, unknown>): Promise<unknown> | unknown;
+};
 export type AiToolCall = { id: string; name: string; args: Record<string, unknown> };
-export type AiMessage = { role: 'system' | 'user' | 'assistant' | 'tool'; content: string; toolCallId?: string; toolCalls?: AiToolCall[] };
+export type AiMessage = {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  toolCallId?: string;
+  toolCalls?: AiToolCall[];
+};
 export type AiGenerationOptions = {
   /** 单次调用覆盖插件默认提示词；不自动读取页面、文件或其他插件的内容。 */
   systemPrompt?: string;
@@ -209,6 +251,8 @@ export interface PluginAiApi {
   getStatus(): Promise<AiResult<AiStatus>>;
   test(requestId?: string): Promise<AiResult<AiCompletion>>;
   chat(request: AiChatRequest): Promise<AiResult<AiCompletion>>;
+  /** Registers a tool and disposes it automatically when the plugin unloads. */
+  registerTool(tool: AiToolRegistration): Disposable;
   cancel(requestId: string): Promise<boolean>;
   onDidChange(listener: (status: AiStatus) => void): Disposable;
 }
@@ -341,7 +385,11 @@ export interface ToolPlugin {
     /** 禁用、卸载或宿主退出前调用。 */
     unload?: (context: PluginLifecycleContext) => MaybePromise<void>;
     /** 设置字段发生变化后调用。 */
-    settingsChanged?: (context: PluginLifecycleContext, key: string, value: boolean | number | string) => MaybePromise<void>;
+    settingsChanged?: (
+      context: PluginLifecycleContext,
+      key: string,
+      value: boolean | number | string,
+    ) => MaybePromise<void>;
   };
   capabilities?: {
     services?: boolean;
