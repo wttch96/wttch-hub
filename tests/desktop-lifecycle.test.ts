@@ -42,8 +42,10 @@ for (const primary of [false, true]) test(`主进程单实例与关闭行为：�
     'dotenv/config': {}, 'node:path': path, 'node:url': { pathToFileURL }, 'node:fs': {},
     'electron-squirrel-startup': false, systeminformation: {}, fflate: {},
     './services/main': { registerWechatIpc: (): void => undefined },
-    './ai/main': { registerAiIpc: (): void => undefined }, './data/main': { registerDataIpc: (): void => undefined },
-    './desktop/preferences': { shouldHideOnClose, createPreferences: () => ({ get: () => behavior }) },
+    '@module/ai/main': { registerAiIpc: (): void => undefined }, './data/main': { registerDataIpc: (): void => undefined },
+    './system/macosStats': { macGpuUtilization: async (): Promise<undefined> => undefined, macMemoryUsage: (): number => 0 },
+    './desktop/preferences': { shouldHideOnClose, createPreferences: () => ({ get: () => behavior, getDebugLoggingEnabled: () => false }) },
+    './desktop/logger': { debugError: (): void => undefined, debugLog: (): void => undefined, initializeDebugLogger: (): void => undefined },
     './desktop/tray': { getApplicationIconPath: () => '/icon.png', createSystemTray: () => ({ refresh: (): void => undefined }) },
   };
   const source = ts.transpileModule(readFileSync('src/main.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;

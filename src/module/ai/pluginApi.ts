@@ -10,6 +10,7 @@ import type {
   AiStatus,
   AiToolRegistration,
   Disposable,
+  PluginDebugApi,
   PluginAiApi,
   ToolPlugin,
 } from '@wttch-hub/plugin-api';
@@ -43,6 +44,7 @@ export class PluginAiApiClient implements PluginAiApi {
     private readonly enabled: () => boolean,
     private readonly bridge: () => AiBridge | undefined,
     private readonly subscriptions: Disposable[] = [],
+    private readonly debug?: PluginDebugApi,
   ) {
     this.owner = `plugin:${plugin.id}`;
   }
@@ -71,12 +73,35 @@ export class PluginAiApiClient implements PluginAiApi {
 
   registerTool = (tool: AiToolRegistration) => {
     // 工具注册会影响全局工具表，未授权插件必须保持无副作用。
-    if (!this.isAllowed()) return this.emptyDisposable();
+    if (!this.isAllowed()) {
+      this.debug?.warn('AI 工具未注册：插件未声明 AI 能力或已被禁用', { name: tool.name });
+      return this.emptyDisposable();
+    }
 
-    const registration = registry.register(tool);
+    const name = `${this.plugin.id.replaceAll('-', '_')}_${tool.name}`;
+    let registration: Disposable;
+    try {
+      registration = registry.register({
+        ...tool,
+        // Tool names are global in the provider request.  Keep plugin source
+        // names short and namespace them at the host boundary.
+        // 插件 ID 允许连字符，而服务商工具名只接受字母、数字和下划线。
+        name,
+      });
+    } catch (error) {
+      this.debug?.error('AI 工具注册失败', {
+        sourceName: tool.name,
+        registeredName: name,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+    this.debug?.info('AI 工具已注册', { sourceName: tool.name, registeredName: name });
     // 插件卸载时，运行时会遍历 subscriptions，借此自动注销工具。
     return this.trackDisposable(registration);
   };
+
+  registerTools = (tools: AiToolRegistration[]) => tools.map(tool => this.registerTool(tool));
 
   /**
    * 允许取消已发出的请求，即使插件随后被禁用；但仍只能取消本插件 owner
@@ -137,7 +162,7 @@ export class PluginAiApiClient implements PluginAiApi {
     // 将取消器交由插件生命周期管理；dispose 不等待 IPC 返回，防止卸载流程被阻塞。
     const cancellation = {
       dispose: () => {
-        void host.cancel(this.owner, requestId).catch(() => undefined);
+        void host.cancel(this.owner, requestId).catch((): undefined => undefined);
       },
     };
     this.subscriptions.push(cancellation);
@@ -197,4 +222,5 @@ export const createPluginAiApi = (
   enabled: () => boolean,
   bridge: () => AiBridge | undefined,
   subscriptions: Disposable[] = [],
-): PluginAiApi => new PluginAiApiClient(plugin, enabled, bridge, subscriptions);
+  debug?: PluginDebugApi,
+): PluginAiApi => new PluginAiApiClient(plugin, enabled, bridge, subscriptions, debug);

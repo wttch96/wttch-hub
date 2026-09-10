@@ -6,6 +6,7 @@ import type { AiChatRequest, AiCompletion, AiResult, AiStatus, AiError, AiMessag
 import { defaultConfiguration, validateConfiguration, type StoredAiConfiguration } from './config';
 import { aiFailure, isRecord } from './shared';
 import { ChatOpenAI } from '@langchain/openai';
+import type { AIMessageChunk } from '@langchain/core/messages';
 
 /** 通过依赖注入分离 Electron 密钥存储与网络，回归测试无需真实密钥或付费请求。 */
 export interface AiServiceDependencies {
@@ -15,6 +16,7 @@ export interface AiServiceDependencies {
   decrypt(ciphertext: string): string;
   fetch: typeof globalThis.fetch;
   onStatus?: (status: AiStatus) => void;
+  logError?: (event: string, error: unknown, context: Record<string, unknown>) => void;
 }
 
 /** 仅允许文本对话和已定义参数，不透传任意对象到服务商。 */
@@ -144,7 +146,7 @@ export const createAiService = (dependencies: AiServiceDependencies) => {
     }
   };
 
-  const chat = async (owner: string, input: unknown): Promise<AiResult<AiCompletion>> => {
+  const chat = async (owner: string, input: unknown, onChunk?: (content: string) => void): Promise<AiResult<AiCompletion>> => {
     const status = getStatus();
     if (!status.enabled) return aiFailure('DISABLED', 'AI 服务已关闭，请在设置中启用。');
     if (storageError) return { ok: false, error: storageError };
@@ -186,9 +188,26 @@ export const createAiService = (dependencies: AiServiceDependencies) => {
         : message.role === 'assistant' && message.toolCalls?.length
           ? { role: 'assistant', content: message.content, tool_calls: message.toolCalls.map((call) => ({ id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.args) } })) }
           : { role: message.role, content: message.content });
-      const response = await runnable.invoke(messages as never, { signal: controller.signal });
+      let response: Awaited<ReturnType<typeof runnable.invoke>>;
+      let streamedContent = '';
+      if (onChunk) {
+        const stream = await runnable.stream(messages as never, { signal: controller.signal });
+        const chunks: AIMessageChunk[] = [];
+        for await (const chunk of stream) {
+          chunks.push(chunk as unknown as AIMessageChunk);
+          const delta = typeof chunk.content === 'string' ? chunk.content : '';
+          if (!delta) continue;
+          streamedContent += delta;
+          try { onChunk(delta); } catch { /* 页面可能在生成期间关闭，不中断服务商请求。 */ }
+        }
+        // 单个片段只带 tool_call_chunks 这类增量字段，必须按 concat 折叠才能还原完整的
+        // tool_calls 和用量；只取最后一片会把工具调用丢掉。
+        const merged = chunks.reduce<AIMessageChunk | undefined>(
+          (previous, chunk) => (previous === undefined ? chunk : previous.concat(chunk)), undefined);
+        response = (merged ?? { content: streamedContent }) as typeof response;
+      } else response = await runnable.invoke(messages as never, { signal: controller.signal });
       if (controller.signal.aborted) return remember(aiFailure(timedOut ? 'TIMEOUT' : 'CANCELLED', timedOut ? 'AI 请求超时，请稍后重试。' : '请求已停止。', timedOut));
-      const content = typeof response.content === 'string' ? response.content : JSON.stringify(response.content ?? '');
+      const content = onChunk ? streamedContent : typeof response.content === 'string' ? response.content : JSON.stringify(response.content ?? '');
       const toolCalls = Array.isArray(response.tool_calls) ? response.tool_calls
         .filter((call) => typeof call.name === 'string' && isRecord(call.args))
         .map((call) => ({ id: call.id ?? crypto.randomUUID(), name: call.name, args: call.args })) : [];
@@ -200,8 +219,10 @@ export const createAiService = (dependencies: AiServiceDependencies) => {
         ...(validUsage ? { usage: { promptTokens: usage.input_tokens as number, completionTokens: usage.output_tokens as number, totalTokens: usage.total_tokens as number } } : {}),
         ...(toolCalls.length ? { toolCalls } : {}),
       } });
-    } catch {
+    } catch (error) {
       // 不传播底层异常文本：URL、服务响应或第三方库异常可能包含密钥和请求正文。
+      // 主进程日志保留诊断上下文，用户界面仍只显示受控错误文案。
+      dependencies.logError?.('provider request failed', error, { owner, requestId: id, timedOut });
       return remember(controller.signal.aborted
         ? aiFailure(timedOut ? 'TIMEOUT' : 'CANCELLED', timedOut ? 'AI 请求超时，请稍后重试。' : '请求已停止。', timedOut)
         : aiFailure('NETWORK', '无法连接 AI 服务，请检查网络和服务地址。', true));
@@ -213,6 +234,7 @@ export const createAiService = (dependencies: AiServiceDependencies) => {
 
   return {
     getStatus, configure, chat,
+    stream: (owner: string, input: unknown, onChunk: (content: string) => void) => chat(owner, input, onChunk),
     test: (owner: string, requestId?: string) => chat(owner, {
       requestId, messages: [{ role: 'user', content: 'Reply with OK.' }], maxTokens: 32, thinking: false,
     }),

@@ -23,6 +23,7 @@ export default defineConfig({
     alias: {
       // Imported tools (wttch-labs) reference their shared code as '@/...'.
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@module/ai': fileURLToPath(new URL('./src/module/ai/index.ts', import.meta.url)),
     },
   },
 });

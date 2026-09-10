@@ -12,9 +12,9 @@ export const createLifecycleQueue = () => {
   return <T>(id: string, operation: () => Promise<T>): Promise<T> => {
     const result = (pending.get(id) ?? Promise.resolve()).then(operation);
     // 队列尾部吸收错误，让后续清理仍可执行；调用方收到的 result 保留原始异常。
-    const settled = result.then(() => undefined, () => undefined);
+    const settled = result.then((): undefined => undefined, (): undefined => undefined);
     pending.set(id, settled);
-    void settled.then(() => {
+    void settled.then((): void => {
       // 只有当前尾任务可以删除队列，较早完成的任务不能误删后来排入的操作。
       if (pending.get(id) === settled) pending.delete(id);
     });

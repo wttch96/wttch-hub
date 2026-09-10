@@ -323,6 +323,9 @@ const onTitleDblClick = (event: MouseEvent) => {
 .titlebar-ai { right: 16px; }
 .titlebar-left button, .titlebar-ai { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--text-secondary); cursor: pointer; }
 .titlebar-left button:hover, .titlebar-ai:hover { background: var(--accent-weak); color: var(--text); }
+/* macOS reserves the left side of a hiddenInset title bar for native traffic
+   lights. Keep the sidebar control outside that native hit area. */
+.window.is-macos .titlebar-left { left: 84px; }
 .window.is-custom .titlebar-left { left: 84px; }
 .window.is-custom .titlebar-ai { right: 16px; }
 

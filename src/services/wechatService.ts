@@ -208,7 +208,7 @@ export function createWechatService(deps: {
         }
         return result;
       });
-      tail = task.then(() => undefined, () => undefined);
+      tail = task.then((): undefined => undefined, (): undefined => undefined);
       try { return await task; } finally { queued--; }
     },
   };

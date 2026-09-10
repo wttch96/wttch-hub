@@ -37,25 +37,50 @@ export type RegisteredAiTool = AiToolDefinition & {
 export class AiToolRegistry {
   private readonly tools = new Map<string, RegisteredAiTool>();
 
+  /**
+   * 注册一个新的 AI 工具。
+   *
+   * @param tool 已经注册的 AI 工具定义，包含名称、描述、参数结构和调用方法。
+   * @returns 一个可释放的对象，用于清理注册的工具。
+   */
   register(tool: RegisteredAiTool): Disposable {
-    if (!/^[a-z][a-z0-9_]{1,63}$/.test(tool.name)) throw new Error('AI 工具名称无效');
+    if (!/^[a-z][a-z0-9_]{1,63}$/.test(tool.name)) {
+      throw new Error('AI 工具名称无效');
+    }
+
     this.tools.set(tool.name, tool);
 
     return {
+      /**
+       * 释放注册的 AI 工具。
+       */
       dispose: () => {
-        if (this.tools.get(tool.name) === tool) this.tools.delete(tool.name);
+        if (this.tools.get(tool.name) === tool) {
+          this.tools.delete(tool.name);
+        }
       },
     };
   }
 
+  /**
+   * 获取所有已注册的 AI 工具的声明。
+   * @returns 已注册的 AI 工具的声明数组，每个声明包含名称、描述和参数结构。
+   */
   definitions(): AiToolDefinition[] {
-    return [...this.tools.values()].map(({ name, description, parameters }) => ({
+    // 防止 invoke 不能被序列化
+    return [...this.tools.values()].map(({ name, description, schema }) => ({
+      // 只暴露名称、描述和参数，隐藏执行逻辑和内部配置
       name,
       description,
-      parameters,
+      schema,
     }));
   }
 
+  /**
+   * 调用已注册的 AI 工具。
+   * @param call 工具调用请求，包含工具名称和参数。
+   * @returns 工具的执行结果。
+   */
   async invoke(call: AiToolCall): Promise<unknown> {
     const tool = this.tools.get(call.name);
     if (!tool) throw new Error(`AI 工具不存在：${call.name}`);
@@ -66,6 +91,3 @@ export class AiToolRegistry {
 /** 共享注册表；保留函数导出以兼容现有调用方。 */
 /** 全局唯一的 AI 工具注册表，供内置聊天与插件 API 共同使用。 */
 export const registry = new AiToolRegistry();
-
-export const registeredAiToolDefinitions = (): AiToolDefinition[] => registry.definitions();
-export const invokeRegisteredAiTool = (call: AiToolCall): Promise<unknown> => registry.invoke(call);

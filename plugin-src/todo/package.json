@@ -3,8 +3,13 @@
   "version": "1.2.0",
   "private": true,
   "description": "支持 Markdown 正文的 wttch-hub Todo 泳道看板插件。",
-  "dependencies": { "@wttch-hub/plugin-api": "1.0.0" },
-  "peerDependencies": { "vue": "^3.5.0", "lucide-vue-next": "^1.0.0" },
+  "dependencies": {
+    "@wttch-hub/plugin-api": "1.0.0"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0",
+    "lucide-vue-next": "^1.0.0"
+  },
   "scripts": {
     "build": "tsx ../../scripts/build-plugins.ts",
     "test": "node --import tsx --test ../../tests/stores.test.ts"

@@ -7,7 +7,18 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import DOMPurify from 'dompurify';
 import MarkdownIt from 'markdown-it';
 import { useRouter } from 'vue-router';
-import { Bot, LoaderCircle, Plus, Send, Settings2, Square, X } from 'lucide-vue-next';
+import {
+  Bot,
+  CircleCheck,
+  CircleX,
+  LoaderCircle,
+  Plus,
+  Send,
+  Settings2,
+  Square,
+  Wrench,
+  X,
+} from 'lucide-vue-next';
 import { useAiChat } from '../composables/useAiChat';
 import { useAiService } from '../composables/useAiService';
 
@@ -15,6 +26,27 @@ const { opened, close, session } = useAiChat();
 const markdown = new MarkdownIt({ breaks: true, linkify: true });
 /** 外部模型内容先转 Markdown，再净化后才交给 v-html。 */
 const renderMarkdown = (value?: string) => DOMPurify.sanitize(markdown.render(value ?? ''));
+/** 是否有步骤正在执行：有的话步骤自己会转圈，不再额外显示「正在思考」。 */
+const hasRunningStep = (steps: readonly { status: string }[]) =>
+  steps.some(step => step.status === 'running');
+/** 工具参数：无参数时给出明确提示，过长时截断，避免撑破卡片。 */
+const formatArgs = (args?: Record<string, unknown>) => {
+  if (!args || !Object.keys(args).length) return '无参数';
+  const text = JSON.stringify(args);
+  return text.length > 200 ? `${text.slice(0, 200)}…` : text;
+};
+/** 工具结果按 JSON 缩进展示并截断：卡片高度有限，超长内容对用户意义不大。 */
+const RESULT_LIMIT = 4000;
+const formatResult = (result?: string) => {
+  if (!result) return '';
+  let text = result;
+  try {
+    text = JSON.stringify(JSON.parse(result), null, 2);
+  } catch {
+    // 非 JSON 结果原样展示。
+  }
+  return text.length > RESULT_LIMIT ? `${text.slice(0, RESULT_LIMIT)}…` : text;
+};
 const ai = useAiService();
 const router = useRouter();
 const dialog = ref<HTMLDialogElement>();
@@ -30,7 +62,7 @@ const scrollBottom = async () => {
   await nextTick();
   if (transcript.value) transcript.value.scrollTop = transcript.value.scrollHeight;
 };
-watch(() => [session.state.exchanges.length, session.state.busy], () => { void scrollBottom(); });
+watch(() => session.state.exchanges, () => { void scrollBottom(); }, { deep: true });
 watch(opened, async (value) => {
   await nextTick();
   if (value && !dialog.value?.open) {
@@ -156,10 +188,56 @@ const closeBackdrop = (event: MouseEvent) => {
         </div>
         <div class="chat-message assistant">
           <span class="chat-role">AI</span>
-          <!-- 模型文本使用插值渲染，不将其当成 HTML 执行。 -->
-          <div v-if="exchange.status === 'done'" class="chat-markdown" v-html="renderMarkdown(exchange.response?.content)" />
+          <!-- 按执行顺序渲染：文本 → 工具调用卡片 → 后续文本，完整还原生成过程。 -->
+          <template
+            v-for="step in exchange.steps"
+            :key="step.id"
+          >
+            <div
+              v-if="step.kind === 'text'"
+              class="chat-markdown"
+              v-html="renderMarkdown(step.content)"
+            />
+            <div
+              v-else
+              class="chat-tool"
+              :class="`is-${step.status}`"
+            >
+              <div class="chat-tool-head">
+                <Wrench :size="13" />
+                <code>{{ step.name }}</code>
+                <LoaderCircle
+                  v-if="step.status === 'running'"
+                  :size="13"
+                  class="spin"
+                />
+                <CircleCheck
+                  v-else-if="step.status === 'done'"
+                  :size="13"
+                  class="chat-tool-ok"
+                />
+                <CircleX
+                  v-else
+                  :size="13"
+                  class="chat-tool-fail"
+                />
+              </div>
+              <p>{{ formatArgs(step.args) }}</p>
+              <details v-if="step.result !== undefined">
+                <summary>{{ step.status === 'error' ? '查看错误' : '查看结果' }}</summary>
+                <pre>{{ formatResult(step.result) }}</pre>
+              </details>
+            </div>
+          </template>
+          <!-- 兜底：服务商没有推送增量时用最终文本补一次渲染，避免出现空气泡。 -->
+          <div
+            v-if="!exchange.steps.length && exchange.response?.content"
+            class="chat-markdown"
+            v-html="renderMarkdown(exchange.response.content)"
+          />
+          <!-- 没有正在执行的步骤时才提示等待，同时覆盖首轮和两轮之间的空档。 -->
           <p
-            v-else-if="exchange.status === 'pending'"
+            v-if="exchange.status === 'pending' && !hasRunningStep(exchange.steps)"
             class="chat-wait"
           >
             <LoaderCircle
@@ -174,7 +252,7 @@ const closeBackdrop = (event: MouseEvent) => {
             已停止生成。
           </p>
           <p
-            v-else
+            v-else-if="exchange.status === 'error'"
             class="chat-error"
           >
             {{ exchange.error?.message }}<small>{{ exchange.error?.code }}</small>
@@ -281,6 +359,17 @@ textarea { display: block; width: 100%; resize: vertical; min-height: 58px; max-
 .chat-error { color: var(--danger); }
 .chat-muted { color: var(--text-secondary); }
 .chat-wait { display: flex; align-items: center; gap: 8px; }
+.chat-tool { margin: 8px 0; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--panel); }
+.chat-tool.is-error { border-color: var(--danger); }
+.chat-tool-head { display: flex; align-items: center; gap: 6px; }
+.chat-tool-head > svg:first-child { flex-shrink: 0; color: var(--text-secondary); }
+.chat-tool-head code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: Consolas, monospace; font-size: 12px; }
+.chat-tool-ok { color: var(--accent); }
+.chat-tool-fail { color: var(--danger); }
+.chat-tool p { margin: 6px 0 0; color: var(--text-secondary); font-size: 11px; line-height: 1.6; }
+.chat-tool details { margin-top: 6px; }
+.chat-tool summary { cursor: pointer; color: var(--text-secondary); font-size: 11px; }
+.chat-tool pre { overflow: auto; max-height: 220px; margin: 6px 0 0; padding: 8px; border-radius: 6px; background: var(--content-bg); font-family: Consolas, monospace; font-size: 11px; line-height: 1.5; }
 .chat-composer { padding: 14px 18px; border-top: 1px solid var(--hairline); }
 .chat-markdown :deep(p) { margin: .45em 0; line-height: 1.6; } .chat-markdown :deep(pre) { overflow: auto; padding: 10px; border-radius: 7px; background: var(--content-bg); } .chat-markdown :deep(code) { font-family: Consolas, monospace; } .chat-markdown :deep(a) { color: var(--accent); } .chat-markdown :deep(ul), .chat-markdown :deep(ol) { padding-left: 20px; }
 .chat-composer-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; }

@@ -34,7 +34,7 @@ test('微信 IPC 拒绝外部、子 frame 与 Widget；登录凭据只经安全�
         safeStorage: { isEncryptionAvailable: () => true, encryptString: (raw: string) => { encrypted++; assert.ok(raw.includes('never-expose-me')); return Buffer.from('encrypted-by-os'); } },
       },
       'node:fs': fs, 'node:path': path, qrcode: { toDataURL: async () => 'data:image/png;base64,qr' },
-      '../desktop/preferences': preferences, './wechatClient': client, './wechatService': service,
+      '../desktop/preferences': preferences, '../desktop/logger': { debugLog: (): void => undefined }, './wechatClient': client, './wechatService': service,
     };
     const source = ts.transpileModule(fs.readFileSync('src/services/main.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
     runInNewContext(source, { exports, require: (id: string) => dependencies[id], process: { platform: 'darwin' }, URL, Buffer });

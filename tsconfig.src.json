@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "./src",
+    "outDir": "./.tsbuild/app"
+  },
+  "references": [{ "path": "./src/module/ai" }],
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.json", "forge.env.d.ts"],
+  "exclude": ["src/module"]
+}

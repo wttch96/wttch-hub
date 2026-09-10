@@ -7,9 +7,9 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
-import { createAiService } from '../src/ai/service';
-import * as config from '../src/ai/config';
-import * as shared from '../src/ai/shared';
+import { createAiService } from '../src/module/ai/service';
+import * as config from '../src/module/ai/config';
+import * as shared from '../src/module/ai/shared';
 
 /** 使用真实注册逻辑和 service，模拟 Electron、文件系统与系统加密，避免访问开发者密钥链。 */
 test('AI IPC 拒绝外部页面/子 frame/浮动窗口改配置，合法主窗口配置不返回密钥', async () => {
@@ -41,7 +41,7 @@ test('AI IPC 拒绝外部页面/子 frame/浮动窗口改配置，合法主窗�
     './service': { createAiService },
     './shared': shared,
   };
-  const source = ts.transpileModule(readFileSync('src/ai/main.ts', 'utf8'), {
+  const source = ts.transpileModule(readFileSync('src/module/ai/main.ts', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText;
   runInNewContext(source, { exports, require: (id: string) => dependencies[id], process: { platform: 'darwin', pid: 1 }, Buffer, URL });

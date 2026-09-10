@@ -40,7 +40,7 @@ interface Window {
   wechatHost?: import('./services/contracts').WechatBridge;
   desktopHost?: import('./data/contracts').DesktopBridge;
   /** 统一 AI 服务桥，浏览器预览时不存在。 */
-  aiHost?: import('./ai/contracts').AiBridge;
+  aiHost?: import('@module/ai').AiBridge;
   /** Present when the page runs inside Electron (see src/preload.ts). */
   windowControls?: WindowControlsApi;
   toolHost?: {

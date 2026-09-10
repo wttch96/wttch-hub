@@ -10,9 +10,13 @@ import type {
   AiStatus,
   Disposable,
 } from '@wttch-hub/plugin-api';
-import type { AiConfigurationUpdate } from '@/ai/contracts';
-import { aiFailure, DEFAULT_AI_STATUS } from '@/ai/shared';
-import { runLangChainAgent } from '@/ai/langchainAdapter';
+import {
+  aiFailure,
+  DEFAULT_AI_STATUS,
+  runLangChainAgent,
+  type AgentEvent,
+  type AiConfigurationUpdate,
+} from '@module/ai';
 
 const state = reactive({
   status: { ...DEFAULT_AI_STATUS },
@@ -69,6 +73,12 @@ export const useAiService = () => ({
   },
   async chat(request: AiChatRequest): Promise<AiResult<AiCompletion>> {
     return runLangChainAgent(request);
+  },
+  async stream(
+    request: AiChatRequest,
+    onEvent: (event: AgentEvent) => void,
+  ): Promise<AiResult<AiCompletion>> {
+    return runLangChainAgent(request, onEvent);
   },
   test: (requestId: string): Promise<AiResult<AiCompletion>> =>
     invoke(() => window.aiHost!.test('settings', requestId)),

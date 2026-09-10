@@ -6,7 +6,7 @@ import { app, BrowserWindow, dialog, ipcMain, net, Notification, screen } from '
 import 'dotenv/config';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { registerAiIpc } from './ai/main';
+import { registerAiIpc } from '@module/ai/main';
 import { registerWechatIpc } from './services/main';
 import { registerDataIpc } from './data/main';
 import { createPreferences, shouldHideOnClose } from './desktop/preferences';
@@ -15,6 +15,8 @@ import fs from 'node:fs';
 import started from 'electron-squirrel-startup';
 import si from 'systeminformation';
 import { strFromU8, unzipSync } from 'fflate';
+import { macGpuUtilization, macMemoryUsage } from './system/macosStats';
+import { debugError, debugLog, initializeDebugLogger } from './desktop/logger';
 
 type PluginPackageInfo = {
   apiVersion: number;
@@ -80,6 +82,7 @@ const loadPluginPackages = (): PluginPackageInfo[] => pluginDirectories().flatMa
       try {
         return readPluginPackage(path.join(directory, file), meta);
       } catch (error) {
+        debugError('plugins', 'package ignored', error, { file, source: meta.source });
         console.warn(`[plugins] ignored ${file}: ${error instanceof Error ? error.message : String(error)}`);
         return [];
       }
@@ -97,6 +100,15 @@ if (!primaryInstance) app.quit();
 let quitting = false;
 app.on('before-quit', () => { quitting = true; });
 let preferences: ReturnType<typeof createPreferences>;
+
+// 渲染进程的 console 默认只在 DevTools 可见。将 warning/error 转发到主进程，
+// 使从终端启动 Electron 时也能直接看到插件与页面异常。
+app.on('web-contents-created', (_event, contents) => {
+  contents.on('console-message', (_consoleEvent, level, message, line, sourceId) => {
+    if (level < 2) return;
+    console.error(`[renderer:${level}] ${message} (${sourceId}:${line})`);
+  });
+});
 
 // Keep hardware acceleration on for normal desktop use. It is needed for
 // smooth macOS vibrancy and translucent-window resizing; disable it only for
@@ -195,6 +207,7 @@ ipcMain.handle(IPC.floatingOpen, async (_event, pluginId: unknown, options: Floa
   const key = floatingWindowKey(pluginId, windowId);
   const existing = floatingWidgets.get(key);
   if (existing && !existing.isDestroyed()) {
+    debugLog('floating-widget', 'reusing widget window', { pluginId, windowId });
     applyFloatingOptions(existing, options);
     existing.show(); existing.focus();
     return true;
@@ -220,6 +233,7 @@ ipcMain.handle(IPC.floatingOpen, async (_event, pluginId: unknown, options: Floa
     webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
   });
   floatingWidgets.set(key, floatingWindow);
+  debugLog('floating-widget', 'creating widget window', { pluginId, windowId, width, height });
   setFloatingVisibleOnAllWorkspaces(floatingWindow, options.alwaysOnTop !== false);
   floatingWindow.on('closed', () => floatingWidgets.delete(key));
   const hash = `/floating/${pluginId}`;
@@ -234,6 +248,7 @@ ipcMain.handle(IPC.floatingOpen, async (_event, pluginId: unknown, options: Floa
     floatingWindow.focus();
     return floatingWindow.isVisible();
   } catch (error) {
+    debugError('floating-widget', 'failed to open', error, { pluginId, windowId });
     floatingWidgets.delete(key);
     if (!floatingWindow.isDestroyed()) floatingWindow.destroy();
     console.error(`[floating-widget] failed to open ${pluginId}:`, error);
@@ -287,6 +302,7 @@ ipcMain.handle(IPC.pluginInstall, async () => {
   fs.mkdirSync(managedDirectory, { recursive: true });
   const destination = path.join(managedDirectory, path.basename(source));
   if (path.resolve(source) !== path.resolve(destination)) fs.copyFileSync(source, destination);
+  debugLog('plugins', 'package installed', { file: path.basename(destination) });
   return { installed: readPluginPackage(destination, { source: 'managed', removable: true }) };
 });
 ipcMain.handle(IPC.pluginRemove, (_event, input: { file?: unknown; source?: unknown }) => {
@@ -298,6 +314,7 @@ ipcMain.handle(IPC.pluginRemove, (_event, input: { file?: unknown; source?: unkn
   const target = path.join(location.directory, path.basename(file));
   if (path.dirname(target) !== location.directory || !target.endsWith('.zip')) throw new Error('无效的插件包路径');
   if (fs.existsSync(target)) fs.unlinkSync(target);
+  debugLog('plugins', 'package removed', { file: path.basename(target), source });
   return loadPluginPackages();
 });
 
@@ -341,7 +358,9 @@ ipcMain.on(IPC.pluginDebugLog, (event, input: unknown) => {
     try { data = ` ${JSON.stringify(entry.data).slice(0, 10_000)}`; } catch { data = ' [unserializable data]'; }
   }
   const level = entry.level as 'debug' | 'info' | 'warn' | 'error';
-  console[level](`[plugin:${entry.pluginId}] ${message}${data}`);
+  const scope = `plugin:${entry.pluginId}`;
+  if (level === 'error') debugError(scope, message, data || new Error(message));
+  else debugLog(scope, `${level}: ${message}`, data ? { data } : {});
 });
 
 type SystemStatsSnapshot = {
@@ -366,18 +385,26 @@ const collectSystemStats = async (): Promise<SystemStatsSnapshot> => {
     lightweightSampling ? Promise.resolve(undefined) : si.disksIO(),
     lightweightSampling ? Promise.resolve(undefined) : si.networkInterfaceDefault(),
   ]);
-  // `si.graphics()` is comparatively expensive on software-rendered Windows
-  // machines, and cannot report a useful utilization value without a GPU.
-  const graphics = disableHardwareAcceleration ? undefined : await si.graphics();
+  // systeminformation 在 macOS 将文件缓存并入 used，Apple Silicon 也通常
+  // 不填 utilizationGpu；分别使用可用内存和 IORegistry 的设备利用率。
+  const macGpu = process.platform === 'darwin' && !disableHardwareAcceleration
+    ? await macGpuUtilization()
+    : undefined;
+  // `si.graphics()` is comparatively expensive on software-rendered Windows.
+  const graphics = disableHardwareAcceleration || process.platform === 'darwin'
+    ? undefined
+    : await si.graphics();
   const network = networkInterface ? await si.networkStats(networkInterface) : [];
   const networkStats = network[0];
   return {
     cpu: load.currentLoad,
-    gpu: graphics
+    gpu: macGpu ?? (graphics
       ? graphics.controllers.reduce((total, controller) => total + (controller.utilizationGpu ?? 0), 0) /
         Math.max(1, graphics.controllers.length)
-      : 0,
-    memory: memory.used / memory.total * 100,
+      : 0),
+    memory: process.platform === 'darwin'
+      ? macMemoryUsage(memory)
+      : memory.used / memory.total * 100,
     readBytes: io?.rIO_sec ?? 0,
     writeBytes: io?.wIO_sec ?? 0,
     downloadBytes: networkStats?.rx_sec ?? 0,
@@ -388,6 +415,7 @@ ipcMain.handle(IPC.systemStats, async () => {
   const now = Date.now();
   if (systemStatsCache && now - systemStatsCache.capturedAt < 1500) return systemStatsCache.value;
   if (!systemStatsRefresh) {
+    debugLog('system', 'refreshing system statistics');
     systemStatsRefresh = collectSystemStats()
       .then((value) => {
         systemStatsCache = { value, capturedAt: Date.now() };
@@ -672,6 +700,8 @@ const showWorkbench = () => {
 app.on('ready', () => {
   if (!primaryInstance || quitting) return;
   preferences = createPreferences(app.getPath('userData'));
+  initializeDebugLogger(app.getPath('userData'), preferences.getDebugLoggingEnabled());
+  debugLog('app', 'ready', { packaged: app.isPackaged, platform: process.platform });
   // 只允许本应用文档访问 AI；开发时匹配 Vite origin 与入口路径，打包时匹配精确文件 URL。
   const rendererUrl = devServerUrl
     || pathToFileURL(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)).href;
@@ -682,7 +712,7 @@ app.on('ready', () => {
       return actual.protocol === expected.protocol && actual.host === expected.host && actual.pathname === expected.pathname;
     } catch { return false; }
   };
-  registerAiIpc(isAppUrl);
+  registerAiIpc(isAppUrl, (event, error, context) => debugError('ai', event, error, context));
   registerWechatIpc(isAppUrl);
   registerDataIpc(isAppUrl, preferences, () => Boolean(systemTray), () => {
     for (const window of floatingWidgets.values()) window.destroy();
@@ -704,7 +734,7 @@ app.on('ready', () => {
   createWindow();
 });
 
-app.on('will-quit', () => { systemTray?.destroy(); systemTray = undefined; });
+app.on('will-quit', () => { debugLog('app', 'will quit'); systemTray?.destroy(); systemTray = undefined; });
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

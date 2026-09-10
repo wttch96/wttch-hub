@@ -4,10 +4,11 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { AiBridge } from '../src/ai/contracts';
+import type { AiBridge } from '../src/module/ai/contracts';
 import type { AiChatRequest, Disposable, ToolPlugin } from '../src/types/plugin';
-import { createPluginAiApi } from '../src/ai/pluginApi';
-import { DEFAULT_AI_STATUS } from '../src/ai/shared';
+import { createPluginAiApi } from '../src/module/ai/pluginApi';
+import { DEFAULT_AI_STATUS } from '../src/module/ai/shared';
+import { registry } from '../src/module/ai/callTools';
 
 const definition = { id: 'example', capabilities: { ai: true }, ai: { systemPrompt: '默认提示词', temperature: .3 } } as ToolPlugin;
 test('插件能力与启用状态每次校验，单次参数优先且 owner 固定', async () => {
@@ -54,4 +55,21 @@ test('插件订阅与未完成请求可由生命周期统一清理', async () =>
   assert.equal(cancelled, true);
   complete(); await pending;
   assert.equal(subscriptions.length, 0);
+});
+
+test('工具名称由宿主自动加上插件 ID 前缀', () => {
+  const subscriptions: Disposable[] = [];
+  const api = createPluginAiApi(definition, () => true, () => undefined, subscriptions);
+  const registration = api.registerTool({ name: 'add_lane', description: '添加泳道', schema: {} as never, invoke: () => undefined });
+  assert.ok(registry.definitions().some(tool => tool.name === 'example_add_lane'));
+  registration.dispose();
+  assert.ok(!registry.definitions().some(tool => tool.name === 'example_add_lane'));
+});
+
+test('含连字符的插件 ID 会转换为服务商允许的工具名', () => {
+  const plugin = { ...definition, id: 'system-monitor' };
+  const api = createPluginAiApi(plugin, () => true, () => undefined);
+  const registration = api.registerTool({ name: 'get_stats', description: '读取系统状态', schema: {} as never, invoke: () => undefined });
+  assert.ok(registry.definitions().some(tool => tool.name === 'system_monitor_get_stats'));
+  registration.dispose();
 });

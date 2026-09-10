@@ -4,8 +4,8 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createAiService, buildChatBody, type AiServiceDependencies } from '../src/ai/service';
-import { defaultConfiguration, normalizeBaseUrl, parseStoredConfiguration } from '../src/ai/config';
+import { createAiService, buildChatBody, type AiServiceDependencies } from '../src/module/ai/service';
+import { defaultConfiguration, normalizeBaseUrl, parseStoredConfiguration } from '../src/module/ai/config';
 import type { AiStatus, AiResult } from '../src/types/plugin';
 
 const completion = () => new Response(JSON.stringify({ model: 'test-model', choices: [{ message: { content: '测试回答' }, finish_reason: 'stop' }], usage: { prompt_tokens: 3, completion_tokens: 4, total_tokens: 7 } }));

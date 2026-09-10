@@ -221,7 +221,7 @@ export function renderDiagram(nodes: LayoutNode[], opts?: RenderOptions): Diagra
   // 行间距按同行最大下划线层数放宽，保证下划线 + 下方文字不压到下一行。
   const uLines: ULine[] = []
   collectULines(vis, lineX, uLines)
-  const byRowU: ULine[][] = Array.from({ length: rows }, () => [])
+  const byRowU: ULine[][] = Array.from({ length: rows }, (): ULine[] => [])
   for (const l of uLines) byRowU[l.row].push(l)
   let maxStack = 1
   for (let r = 0; r < rows; r++) {
@@ -245,7 +245,7 @@ export function renderDiagram(nodes: LayoutNode[], opts?: RenderOptions): Diagra
   const body: string[] = []
 
   // 字段切片：按 (行, 深度) 排序绘制，深覆盖浅、父先于子（stable sort 保持声明顺序）。
-  const byRow: Slice[][] = Array.from({ length: rows }, () => [])
+  const byRow: Slice[][] = Array.from({ length: rows }, (): Slice[] => [])
   for (const s of slices) byRow[s.row].push(s)
   for (let r = 0; r < rows; r++) {
     byRow[r].sort((a, b) => a.depth - b.depth)

@@ -7,8 +7,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { CheckCircle2, LoaderCircle, PlugZap, Save } from 'lucide-vue-next';
 import { useRoute } from 'vue-router';
 import { useAiService } from '../composables/useAiService';
-import { DEFAULT_AI_STATUS, DEEPSEEK_MODELS } from '../ai/shared';
-import type { AiConfigurationUpdate } from '../ai/contracts';
+import { DEFAULT_AI_STATUS, DEEPSEEK_MODELS, type AiConfigurationUpdate } from '@module/ai';
 
 const ai = useAiService();
 const route = useRoute();

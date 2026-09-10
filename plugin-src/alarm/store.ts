@@ -106,7 +106,7 @@ export const startAlarmScheduler = (pluginApi: PluginComponentApi, schedule = tr
         text: alarm.repeat === 'once' ? '设定的提醒时间已到' : `重复闹钟 · ${alarm.time}`,
       });
       void showReminder(pluginApi, `闹钟：${alarm.label}`,
-        alarm.repeat === 'once' ? '设定的提醒时间已到' : `重复闹钟 · ${alarm.time}`).catch(() => undefined);
+        alarm.repeat === 'once' ? '设定的提醒时间已到' : `重复闹钟 · ${alarm.time}`).catch((): undefined => undefined);
     }
   };
   tick();

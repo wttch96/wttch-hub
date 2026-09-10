@@ -12,7 +12,7 @@ import type { ToolPlugin } from '../src/types/plugin';
 import type { pluginRuntime } from '../src/plugins/runtime';
 import { createPluginServicesApi } from '../src/services/pluginApi';
 import { createPluginDataApi } from '../src/data/pluginApi';
-import { createPluginAiApi } from '../src/ai/pluginApi';
+import { createPluginAiApi } from '../src/module/ai/pluginApi';
 import { createLifecycleQueue } from '../src/plugins/lifecycleQueue';
 import { createPluginExtensionRegistry } from '../src/plugins/extensions';
 
@@ -23,11 +23,14 @@ import { createPluginExtensionRegistry } from '../src/plugins/extensions';
  */
 const createRuntime = (events: ToolPlugin['events']) => {
   const notifications: string[] = [];
+  /** 模拟主进程落盘：先结构化克隆参数，暴露无法序列化的响应式代理。 */
+  const saved: Record<string, unknown>[] = [];
+  const cloneErrors: string[] = [];
   const dependencies: Record<string, unknown> = {
     vue,
     './lifecycleQueue': { createLifecycleQueue },
     './extensions': { createPluginExtensionRegistry },
-    '../ai/pluginApi': { createPluginAiApi },
+    '@module/ai': { createPluginAiApi },
     '../data/pluginApi': { createPluginDataApi },
     '../services/pluginApi': { createPluginServicesApi },
     '@wttch-hub/plugin-debug': {
@@ -57,9 +60,19 @@ const createRuntime = (events: ToolPlugin['events']) => {
       return dependencies[id];
     },
     localStorage: { getItem: (): null => null, setItem: (): void => undefined },
-    window: { addEventListener: (): void => undefined },
+    window: {
+      addEventListener: (): void => undefined,
+      pluginStorageHost: {
+        read: (): Record<string, unknown> => ({}),
+        write: (_pluginId: string, value: Record<string, unknown>) => {
+          try { saved.push(structuredClone(value)); }
+          catch (error) { cloneErrors.push((error as Error).message); }
+          return Promise.resolve(true);
+        },
+      },
+    },
   });
-  return { runtime: exports.pluginRuntime!, notifications };
+  return { runtime: exports.pluginRuntime!, notifications, saved, cloneErrors };
 };
 
 const deferred = () => {
@@ -119,4 +132,37 @@ test('设置钩子同步抛错由运行时接管，不从设置调用中逃逸',
   await new Promise<void>((resolve) => setImmediate(resolve));
   assert.equal(runtime.states.test.status, 'error');
   assert.equal(notifications.length, 1);
+});
+
+test('插件存储写入主进程前还原成纯数据，响应式数组也能通过 IPC 克隆', async () => {
+  const { runtime, saved, cloneErrors } = createRuntime({
+    load(context) {
+      // 与 todo 插件一致：先写入数组，再从响应式状态整体回写。
+      context.storage.update('items', [{ id: '1', title: '买牛奶' }]);
+      context.storage.update('lane', context.storage.get('items'));
+    },
+  });
+  const release = await runtime.acquire('test', 'route');
+  await release();
+  assert.deepEqual(cloneErrors, []);
+  assert.equal(saved.length, 2);
+  assert.deepEqual(saved[1], { items: [{ id: '1', title: '买牛奶' }], lane: [{ id: '1', title: '买牛奶' }] });
+});
+
+test('插件资源按插件 ID 统一追踪，并在禁用时以注册的逆序自动释放', async () => {
+  const calls: string[] = [];
+  const { runtime } = createRuntime({
+    load(context) {
+      context.subscriptions.push({ dispose: () => calls.push('manual') });
+      context.settings.onDidChange(() => undefined).dispose();
+      const extension = context.extensions.registerExtension({ name: 'test-extension' });
+      context.subscriptions.push({ dispose: () => calls.push('after-extension') });
+      // The host-owned registration is tracked automatically; plugin authors
+      // do not need to put its returned Disposable into subscriptions.
+      assert.equal(typeof extension.dispose, 'function');
+    },
+  });
+  await runtime.initialize();
+  await runtime.setEnabled('test', false);
+  assert.deepEqual(calls, ['after-extension', 'manual']);
 });

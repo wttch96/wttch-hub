@@ -5,7 +5,7 @@
 import { computed, reactive, readonly } from 'vue';
 import { createPluginServicesApi } from '../services/pluginApi';
 import { createPluginDataApi } from '../data/pluginApi';
-import { createPluginAiApi } from '../ai/pluginApi';
+import { createPluginAiApi } from '@module/ai';
 import { createLifecycleQueue } from './lifecycleQueue';
 import { createPluginExtensionRegistry } from './extensions';
 import type {
@@ -72,8 +72,13 @@ const save = () => localStorage.setItem(persistenceKey, JSON.stringify({
   values: { ...persisted.values, ...values },
   storage: { ...persisted.storage, ...storage },
 }));
+/**
+ * 主进程按 JSON 写入插件的 data.json，而 IPC 的结构化克隆不接受 Vue 响应式代理，
+ * 因此发送前先按落盘格式还原成纯数据；浅拷贝只会把代理原样带过去。
+ */
+const toPlainData = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const savePluginStorage = (pluginId: string) => {
-  void window.pluginStorageHost?.write(pluginId, { ...storage[pluginId] });
+  void window.pluginStorageHost?.write(pluginId, toPlainData(storage[pluginId] ?? {}));
 };
 // Electron floating widgets run in a separate renderer. Keep settings and
 // plugin-private data synchronized through the shared localStorage origin.
@@ -102,9 +107,35 @@ const dispose = async (cleanup?: PluginCleanup) => {
   if (!cleanup) return;
   if (typeof cleanup === 'function') await cleanup(); else await cleanup.dispose();
 };
+/**
+ * Attach a resource to the owning plugin.  The wrapper makes explicit disposal
+ * safe and removes it from the owner's list, while unload disposes remaining
+ * resources in reverse registration order.
+ */
+const trackDisposable = (pluginId: string, resource: Disposable): Disposable => {
+  const owned = subscriptions.get(pluginId) ?? [];
+  subscriptions.set(pluginId, owned);
+  let disposed = false;
+  const tracked: Disposable = {
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      const index = owned.indexOf(tracked);
+      if (index >= 0) owned.splice(index, 1);
+      resource.dispose();
+    },
+  };
+  owned.push(tracked);
+  return tracked;
+};
 const fail = (plugin: ToolPlugin, error: unknown) => {
   states[plugin.id].status = 'error';
   states[plugin.id].error = error instanceof Error ? error.message : String(error);
+  // 经 preload 的 pluginDebugHost 发往主进程，由统一 logger 输出到 console。
+  createElectronPluginDebugger({ pluginId: plugin.id }).api.error('生命周期执行失败', {
+    message: states[plugin.id].error,
+    ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
+  });
   useToast().error(`${plugin.name}：${states[plugin.id].error}`);
 };
 
@@ -131,7 +162,7 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
       const keys = new Set([...Object.keys(previous), ...Object.keys(next)]);
       keys.forEach(key => pluginStorageListeners.forEach(listener => listener(key, next[key])));
     }),
-    ai: createPluginAiApi(plugin, () => states[plugin.id].enabled, () => window.aiHost, pluginSubscriptions),
+    ai: createPluginAiApi(plugin, () => states[plugin.id].enabled, () => window.aiHost, pluginSubscriptions, debug),
     host: {
       systemStats: () => plugin.capabilities?.systemStats && window.toolHost
         ? window.toolHost.systemStats()
@@ -161,13 +192,13 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
     settings: {
       get: <T extends SettingValue>(key: string, fallback?: T) => (values[plugin.id]?.[key] as T | undefined) ?? fallback,
       update: (key, value) => updateSetting(plugin.id, key, value),
-      onDidChange: (listener) => { listeners.add(listener); return { dispose: () => listeners.delete(listener) }; },
+      onDidChange: (listener) => trackDisposable(plugin.id, { dispose: () => listeners.delete(listener) }),
     },
     storage: {
       get: <T>(key: string, fallback?: T) => (storage[plugin.id]?.[key] as T | undefined) ?? fallback,
       update: (key, value) => { storage[plugin.id][key] = value; save(); savePluginStorage(plugin.id); pluginStorageListeners.forEach((listener) => listener(key, value)); },
       delete: (key) => { delete storage[plugin.id][key]; save(); savePluginStorage(plugin.id); pluginStorageListeners.forEach((listener) => listener(key, undefined)); },
-      onDidChange: (listener) => { pluginStorageListeners.add(listener); return { dispose: () => pluginStorageListeners.delete(listener) }; },
+      onDidChange: (listener) => trackDisposable(plugin.id, { dispose: () => pluginStorageListeners.delete(listener) }),
     },
     ui: {
       showToast: (...args) => {
@@ -183,7 +214,7 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
     },
     debug,
     extensions: {
-      registerExtension: (extension) => extensions.register(plugin.id, extension),
+      registerExtension: (extension) => trackDisposable(plugin.id, extensions.register(plugin.id, extension)),
       getExtension: <T extends object>(pluginId: string) => states[pluginId]?.enabled ? extensions.get<T>(pluginId) : undefined,
     },
   };

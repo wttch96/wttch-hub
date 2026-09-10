@@ -24,7 +24,7 @@
     "build:plugins": "tsx scripts/build-plugins.ts",
     "prepare:plugins": "npm run build:packages && npm run build:plugins && npm run pack:plugins && npm run install:plugins",
     "lint": "eslint --ext .ts,.tsx,.vue .",
-    "typecheck": "tsc --noEmit --module esnext --allowImportingTsExtensions",
+    "typecheck": "tsc -b tsconfig.json && tsc --noEmit -p tsconfig.plugins.json",
     "test": "node --import tsx --test tests/*.test.ts",
     "build:icons": "node scripts/build-icons.mjs"
   },
@@ -57,7 +57,7 @@
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-vue": "^9.33.0",
     "tsx": "^4.23.13",
-    "typescript": "~5.4.5",
+    "typescript": "5.9",
     "vite": "^5.4.21",
     "vue-eslint-parser": "^9.4.3"
   },
@@ -75,6 +75,6 @@
     "systeminformation": "^5.33.8",
     "vue": "^3.5.42",
     "vue-router": "^4.6.4",
-    "zod": "^3.25.76"
+    "zod": "^4.0.0"
   }
 }

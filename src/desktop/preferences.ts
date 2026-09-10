@@ -15,14 +15,25 @@ export function writeJson(file: string, value: unknown) {
 export function createPreferences(directory: string) {
   const file = path.join(directory, 'desktop-config.json');
   let closeBehavior: CloseBehavior = 'quit';
-  try { if (JSON.parse(fs.readFileSync(file, 'utf8')).closeBehavior === 'tray') closeBehavior = 'tray'; }
+  let debugLoggingEnabled = false;
+  try {
+    const stored = JSON.parse(fs.readFileSync(file, 'utf8')) as { closeBehavior?: unknown; debugLoggingEnabled?: unknown };
+    if (stored.closeBehavior === 'tray') closeBehavior = 'tray';
+    debugLoggingEnabled = stored.debugLoggingEnabled === true;
+  }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.warn('[desktop] 配置读取失败，使用关闭时退出', error); }
   return {
     get: () => closeBehavior,
+    getDebugLoggingEnabled: () => debugLoggingEnabled,
     set(value: unknown) {
       if (value !== 'quit' && value !== 'tray') throw new Error('无效的关闭行为');
-      writeJson(file, { closeBehavior: value });
+      writeJson(file, { closeBehavior: value, debugLoggingEnabled });
       closeBehavior = value;
+    },
+    setDebugLoggingEnabled(value: unknown) {
+      if (typeof value !== 'boolean') throw new Error('Invalid debug logging value');
+      writeJson(file, { closeBehavior, debugLoggingEnabled: value });
+      debugLoggingEnabled = value;
     },
   };
 }

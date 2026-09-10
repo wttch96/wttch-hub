@@ -6,7 +6,7 @@
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcRendererEvent } from 'electron';
-import type { AiBridge } from './ai/contracts';
+import type { AiBridge } from '@module/ai';
 import type { AiStatus, FloatingWidgetWindowOptions, PluginDebugEntry, PluginNotification } from '@wttch-hub/plugin-api';
 
 // On Windows the renderer draws a full macOS-style title bar, so expose a
@@ -89,6 +89,14 @@ const aiHost: AiBridge = {
   getStatus: () => ipcRenderer.invoke('ai:status'),
   configure: (input) => ipcRenderer.invoke('ai:configure', input),
   chat: (owner, request) => ipcRenderer.invoke('ai:chat', owner, request),
+  stream: async (owner, request, onChunk) => {
+    const listener = (_event: IpcRendererEvent, requestId: string, content: string) => {
+      if (requestId === request.requestId) onChunk(content);
+    };
+    ipcRenderer.on('ai:chat-chunk', listener);
+    try { return await ipcRenderer.invoke('ai:chat-stream', owner, request); }
+    finally { ipcRenderer.removeListener('ai:chat-chunk', listener); }
+  },
   test: (owner, requestId) => ipcRenderer.invoke('ai:test', owner, requestId),
   cancel: (owner, requestId) => ipcRenderer.invoke('ai:cancel', owner, requestId),
   onDidChange(callback) {
@@ -103,6 +111,7 @@ contextBridge.exposeInMainWorld('aiHost', aiHost);
 const desktopHost: import('./data/contracts').DesktopBridge = {
   info: () => ipcRenderer.invoke('desktop:info'),
   setCloseBehavior: value => ipcRenderer.invoke('desktop:close-behavior', value),
+  setDebugLoggingEnabled: value => ipcRenderer.invoke('desktop:debug-logging', value),
   openDirectory: () => ipcRenderer.invoke('desktop:open-directory'),
   exportBackup: entries => ipcRenderer.invoke('desktop:export', entries),
   importBackup: entries => ipcRenderer.invoke('desktop:import', entries),

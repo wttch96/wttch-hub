@@ -4,6 +4,8 @@
 
 import { Cpu } from 'lucide-vue-next';
 import { defineToolPlugin } from '@wttch-hub/plugin-api';
+import { z } from 'zod';
+import type { AiToolRegistration } from '@wttch-hub/plugin-api';
 
 export default defineToolPlugin({
   apiVersion: 1,
@@ -16,21 +18,42 @@ export default defineToolPlugin({
   tags: ['CPU', 'GPU', '内存', 'IO'],
   tint: ['#ff375f', 'rgba(255, 55, 95, 0.12)'],
   component: () => import('./components/SystemMonitor.vue'),
-  capabilities: { systemStats: true, toast: true, sheet: true },
+  capabilities: { systemStats: true, toast: true, sheet: true, ai: true },
   events: {
     load(context) {
       // VS Code 风格：放入 subscriptions 的资源由宿主在卸载时统一释放。
-      context.subscriptions.push(context.settings.onDidChange((key, value) => {
-        if (key === 'refreshIntervalMs') context.ui.showToast(`系统监控刷新间隔已更新为 ${value} ms`, 'success');
-      }));
+      context.subscriptions.push(
+        context.settings.onDidChange((key, value) => {
+          if (key === 'refreshIntervalMs')
+            context.ui.showToast(`系统监控刷新间隔已更新为 ${value} ms`, 'success');
+        }),
+      );
+      // 工具在激活上下文中声明，直接使用受控 host API，而非依赖浏览器全局对象。
+      const systemMonitorTool: AiToolRegistration = {
+        name: 'system_monitor',
+        description: '实时查看 CPU、显卡、内存和磁盘 IO，快速掌握当前机器状态。',
+        schema: z.object({}),
+        invoke: () => context.host.systemStats(),
+      };
+      context.ai.registerTool(systemMonitorTool);
     },
     activate() {
       // 页面和 Widget 共用引用计数；第一个消费者出现时激活，最后一个离开时清理。
-      return { dispose() { /* 组件自身会释放采样定时器。 */ } };
+      return {
+        dispose() {
+          /* 组件自身会释放采样定时器。 */
+        },
+      };
     },
-    deactivate() { /* 可在这里暂停插件级后台任务。 */ },
-    unload() { /* subscriptions 将在此回调后由宿主自动释放。 */ },
-    settingsChanged() { /* 复杂插件可在这里重建服务；示例组件通过 props 获取间隔。 */ },
+    deactivate() {
+      /* 可在这里暂停插件级后台任务。 */
+    },
+    unload() {
+      /* subscriptions 将在此回调后由宿主自动释放。 */
+    },
+    settingsChanged() {
+      /* 复杂插件可在这里重建服务；示例组件通过 props 获取间隔。 */
+    },
   },
   statusbar: { label: '系统监控', color: '#ff375f' },
   settings: {

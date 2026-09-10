@@ -10,6 +10,7 @@ const host = window.desktopHost;
 const behavior = ref<CloseBehavior>('quit');
 const directory = ref('');
 const trayAvailable = ref(false);
+const debugLoggingEnabled = ref(false);
 const ready = ref(false);
 const busy = ref(false);
 const message = ref('');
@@ -22,7 +23,7 @@ async function run(action: () => Promise<void>) {
 }
 onMounted(() => { if (host) void run(async () => {
   const info = await host.info();
-  behavior.value = info.closeBehavior; directory.value = info.directory; trayAvailable.value = info.trayAvailable; ready.value = true;
+  behavior.value = info.closeBehavior; directory.value = info.directory; trayAvailable.value = info.trayAvailable; debugLoggingEnabled.value = info.debugLoggingEnabled; ready.value = true;
 }); });
 const changeBehavior = (event: Event) => {
   const input = event.target as HTMLSelectElement;
@@ -31,6 +32,11 @@ const changeBehavior = (event: Event) => {
     try { await host!.setCloseBehavior(next); behavior.value = next; message.value = '关闭行为已保存'; }
     finally { input.value = behavior.value; }
   });
+};
+const changeDebugLogging = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const next = input.checked;
+  void run(async () => { await host!.setDebugLoggingEnabled(next); debugLoggingEnabled.value = next; message.value = next ? '调试日志已开启' : '调试日志已关闭'; });
 };
 const exportBackup = () => run(async () => {
   if (await host!.exportBackup(captureEntries(localStorage))) message.value = '备份已导出';
@@ -64,6 +70,16 @@ const importBackup = () => run(async () => { await host!.importBackup(captureEnt
       <p v-if="ready && !trayAvailable">
         当前系统托盘不可用，关闭窗口将退出应用。
       </p>
+    </div>
+  </div>
+  <div class="group">
+    <h3 class="group-title">调试日志</h3>
+    <div class="card desktop-card">
+      <div class="row">
+        <label for="debug-logging">写入详细诊断日志</label>
+        <input id="debug-logging" type="checkbox" :checked="debugLoggingEnabled" :disabled="!ready || busy" @change="changeDebugLogging">
+      </div>
+      <p>日志写入数据目录的 <code>logs/main.log</code>。不会记录密钥、Token、二维码或消息正文。</p>
     </div>
   </div>
   <div class="group">

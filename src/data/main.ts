@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_KEYS, MAX_BACKUP_BYTES, validateBackup } from './backup';
 import { createPreferences, writeJson } from '../desktop/preferences';
+import { debugError, debugLog, setDebugLoggingEnabled } from '../desktop/logger';
 
 /** 文件路径只由原生对话框或宿主决定，渲染器不能传任意路径读写磁盘。 */
 export function registerDataIpc(isAppUrl: (url: string) => boolean, preferences: ReturnType<typeof createPreferences>, trayAvailable: () => boolean, closeWidgets: () => void) {
@@ -21,8 +22,13 @@ export function registerDataIpc(isAppUrl: (url: string) => boolean, preferences:
       || new URL(event.senderFrame.url).hash.startsWith('#/floating/')) throw new Error('请在主工作台管理数据');
     return action(window, input);
   });
-  handle('info', () => ({ directory, closeBehavior: preferences.get(), trayAvailable: trayAvailable() }));
-  handle('close-behavior', (_window, input) => preferences.set(input));
+  handle('info', () => ({ directory, closeBehavior: preferences.get(), trayAvailable: trayAvailable(), debugLoggingEnabled: preferences.getDebugLoggingEnabled() }));
+  handle('close-behavior', (_window, input) => { preferences.set(input); debugLog('desktop', 'close behavior changed', { behavior: input }); });
+  handle('debug-logging', (_window, input) => {
+    preferences.setDebugLoggingEnabled(input);
+    setDebugLoggingEnabled(input as boolean);
+    debugLog('desktop', 'debug logging setting changed', { enabled: input });
+  });
   handle('open-directory', async () => { const error = await shell.openPath(directory); if (error) throw new Error(error); });
   handle('export', async (window, input) => {
     if (busy) throw new Error('已有数据操作正在进行');

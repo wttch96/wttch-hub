@@ -14,7 +14,10 @@ import { aiFailure } from './shared';
  * 主进程持有密钥、磁盘访问和网络请求。只有当前应用窗口的主 frame 可调用 AI IPC，
  * 外部页面或嵌入的 iframe 不可借用宿主密钥；插件仍处于现有的可信同渲染器模型中。
  */
-export const registerAiIpc = (isAppUrl: (url: string) => boolean) => {
+export const registerAiIpc = (
+  isAppUrl: (url: string) => boolean,
+  logError?: (event: string, error: unknown, context: Record<string, unknown>) => void,
+) => {
   const configurationFile = path.join(app.getPath('userData'), 'ai-config.json');
   const canEncrypt = () => safeStorage.isEncryptionAvailable()
     && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text');
@@ -38,6 +41,7 @@ export const registerAiIpc = (isAppUrl: (url: string) => boolean) => {
       return safeStorage.decryptString(Buffer.from(ciphertext, 'base64'));
     },
     fetch: (input, init) => net.fetch(input instanceof URL ? input.toString() : input, init),
+    logError,
     onStatus(status) {
       for (const window of BrowserWindow.getAllWindows()) {
         try {
@@ -62,6 +66,14 @@ export const registerAiIpc = (isAppUrl: (url: string) => boolean) => {
   ipcMain.handle('ai:chat', (event, owner: unknown, input: unknown) => {
     const key = ownerFor(event, owner);
     return key ? service.chat(key, input) : aiFailure('FORBIDDEN', '当前页面无权调用 AI。');
+  });
+  ipcMain.handle('ai:chat-stream', (event, owner: unknown, input: unknown) => {
+    const key = ownerFor(event, owner);
+    const requestId = typeof input === 'object' && input !== null
+      ? (input as { requestId?: unknown }).requestId
+      : undefined;
+    if (!key || typeof requestId !== 'string') return aiFailure('FORBIDDEN', '当前页面无权调用 AI。');
+    return service.stream(key, input, (content) => event.sender.send('ai:chat-chunk', requestId, content));
   });
   ipcMain.handle('ai:test', (event, owner: unknown, requestId?: string) => {
     const key = ownerFor(event, owner);

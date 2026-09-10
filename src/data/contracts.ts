@@ -4,8 +4,9 @@
 
 import type { Backup, CloseBehavior } from './backup';
 export interface DesktopBridge {
-  info(): Promise<{ directory: string; closeBehavior: CloseBehavior; trayAvailable: boolean }>;
+  info(): Promise<{ directory: string; closeBehavior: CloseBehavior; trayAvailable: boolean; debugLoggingEnabled: boolean }>;
   setCloseBehavior(value: CloseBehavior): Promise<void>;
+  setDebugLoggingEnabled(value: boolean): Promise<void>;
   openDirectory(): Promise<void>;
   exportBackup(entries: Record<string, string>): Promise<boolean>;
   importBackup(entries: Record<string, string>): Promise<boolean>;

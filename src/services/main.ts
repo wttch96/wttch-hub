@@ -10,6 +10,7 @@ import QRCode from 'qrcode';
 import { writeJson } from '../desktop/preferences';
 import { createWechatRequest } from './wechatClient';
 import { createWechatService, emptyWechat, parseWechatStored } from './wechatService';
+import { debugLog } from '../desktop/logger';
 
 /** 微信 token、会话 context、订阅一并加密保存；不进入 localStorage 或通用备份。 */
 export function registerWechatIpc(isAppUrl: (url: string) => boolean) {
@@ -44,14 +45,14 @@ export function registerWechatIpc(isAppUrl: (url: string) => boolean) {
     return callback(...input);
   });
   handle('wechat:status', () => ({ ...service.status(), ...(storageError ? { error: storageError } : {}) }));
-  handle('wechat:login', () => { if (!secure()) throw new Error('系统安全存储不可用，不能保存登录凭据'); return service.login(); });
+  handle('wechat:login', () => { if (!secure()) throw new Error('系统安全存储不可用，不能保存登录凭据'); debugLog('wechat', 'login requested'); return service.login(); });
   handle('wechat:verify', code => service.verify(code));
-  handle('wechat:cancel-login', () => service.cancelLogin());
-  handle('wechat:logout', () => service.logout());
-  handle('wechat:enabled', enabled => service.setEnabled(enabled));
-  handle('wechat:rules', rules => service.saveRules(rules));
-  handle('services:register', input => service.register(input));
-  handle('services:publish', (topic, output) => service.publish(topic, output));
+  handle('wechat:cancel-login', () => { debugLog('wechat', 'login cancelled'); return service.cancelLogin(); });
+  handle('wechat:logout', () => { debugLog('wechat', 'logout requested'); return service.logout(); });
+  handle('wechat:enabled', enabled => { debugLog('wechat', 'enabled changed', { enabled }); return service.setEnabled(enabled); });
+  handle('wechat:rules', rules => { debugLog('wechat', 'rules saved', { count: Array.isArray(rules) ? rules.length : undefined }); return service.saveRules(rules); });
+  handle('services:register', input => { debugLog('services', 'registered', { count: Array.isArray(input) ? input.length : undefined }); return service.register(input); });
+  handle('services:publish', async (topic, output) => { debugLog('services', 'publish requested', { topic }); const result = await service.publish(topic, output); debugLog('services', 'publish completed', { topic, sent: result.sent, failed: result.failed, skipped: result.skipped }); return result; });
   handle('services:status', topic => service.topicStatus(topic));
   app.on('before-quit', () => service.dispose());
   service.start();
