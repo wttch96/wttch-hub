@@ -35,45 +35,61 @@ interface IconfontSearchResponse {
   error?: string;
 }
 
-interface Window {
-  networkDebugHost?: {
-    open(input: import('./preload').NetworkDebugOpenInput): Promise<{ ok: boolean; error?: string }>;
-    close(): Promise<boolean>;
-    clients(): Promise<Array<{ id: string; host: string; port: number }>>;
-    disconnectClient(clientId: string): Promise<boolean>;
-    send(dataBase64: string, clientId?: string): Promise<{ ok: boolean; error?: string }>;
-    onMessage(callback: (message: import('./preload').NetworkDebugMessage) => void): () => void;
-    onState(callback: (state: { open: boolean; error?: string }) => void): () => void;
-    onClients(callback: (clients: Array<{ id: string; host: string; port: number }>) => void): () => void;
-  };
-  serviceHost?: import('./services/contracts').ServiceBridge;
-  wechatHost?: import('./services/contracts').WechatBridge;
-  desktopHost?: import('./data/contracts').DesktopBridge;
-  /** 统一 AI 服务桥，浏览器预览时不存在。 */
-  aiHost?: import('@module/ai').AiBridge;
-  /** Present when the page runs inside Electron (see src/preload.ts). */
-  windowControls?: WindowControlsApi;
-  toolHost?: {
-    systemStats(): Promise<import('./types/plugin').SystemStats>;
-    showNotification(options: import('./types/plugin').PluginNotification): Promise<boolean>;
-    openFloatingWidget(pluginId: string, options?: import('./types/plugin').FloatingWidgetWindowOptions): Promise<boolean>;
-    updateFloatingWidget(pluginId: string, options: import('./types/plugin').FloatingWidgetWindowOptions): Promise<boolean>;
-    closeFloatingWidget(pluginId: string, id?: string): Promise<boolean>;
-    showWorkbench(): Promise<boolean>;
-    pluginPackages(): Promise<import('./types/plugin').PluginPackageInfo[]>;
-    installPluginPackage(): Promise<import('./types/plugin').PluginInstallResult>;
-    removePluginPackage(input: Pick<import('./types/plugin').PluginPackageInfo, 'file' | 'source'>): Promise<import('./types/plugin').PluginPackageInfo[]>;
-  };
-  /** Electron 文件存储桥：插件运行时按 pluginId 访问其专属 data.json。 */
-  pluginStorageHost?: {
-    read(pluginId: string): Record<string, unknown>;
-    write(pluginId: string, value: Record<string, unknown>): Promise<boolean>;
-  };
-  /** Electron 中的插件开发日志桥；仅由 @wttch-hub/plugin-debug 消费。 */
-  pluginDebugHost?: {
-    log(entry: import('@wttch-hub/plugin-api').PluginDebugEntry): void;
-  };
+declare global {
+  interface Window {
+    networkDebugHost?: {
+      open(
+        input: import('./preload').NetworkDebugOpenInput,
+      ): Promise<{ ok: boolean; error?: string }>;
+      close(): Promise<boolean>;
+      clients(): Promise<Array<{ id: string; host: string; port: number }>>;
+      disconnectClient(clientId: string): Promise<boolean>;
+      send(dataBase64: string, clientId?: string): Promise<{ ok: boolean; error?: string }>;
+      onMessage(callback: (message: import('./preload').NetworkDebugMessage) => void): () => void;
+      onState(callback: (state: { open: boolean; error?: string }) => void): () => void;
+      onClients(
+        callback: (clients: Array<{ id: string; host: string; port: number }>) => void,
+      ): () => void;
+    };
+    serviceHost?: import('./services/contracts').ServiceBridge;
+    wechatHost?: import('./services/contracts').WechatBridge;
+    desktopHost?: import('./data/contracts').DesktopBridge;
+    /** 统一 AI 服务桥，浏览器预览时不存在。 */
+    aiHost?: import('@module/ai').AiBridge;
+    /** Present when the page runs inside Electron (see src/preload.ts). */
+    windowControls?: WindowControlsApi;
+    toolHost?: {
+      systemStats(): Promise<import('./types/plugin').SystemStats>;
+      showNotification(options: import('./types/plugin').PluginNotification): Promise<boolean>;
+      openFloatingWidget(
+        pluginId: string,
+        options?: import('./types/plugin').FloatingWidgetWindowOptions,
+      ): Promise<boolean>;
+      updateFloatingWidget(
+        pluginId: string,
+        options: import('./types/plugin').FloatingWidgetWindowOptions,
+      ): Promise<boolean>;
+      closeFloatingWidget(pluginId: string, id?: string): Promise<boolean>;
+      showWorkbench(): Promise<boolean>;
+      pluginPackages(): Promise<import('./types/plugin').PluginPackageInfo[]>;
+      installPluginPackage(): Promise<import('./types/plugin').PluginInstallResult>;
+      removePluginPackage(
+        input: Pick<import('./types/plugin').PluginPackageInfo, 'file' | 'source'>,
+      ): Promise<import('./types/plugin').PluginPackageInfo[]>;
+    };
+    /** Electron 文件存储桥：插件运行时按 pluginId 访问其专属 data.json。 */
+    pluginStorageHost?: {
+      read(pluginId: string): Record<string, unknown>;
+      write(pluginId: string, value: Record<string, unknown>): Promise<boolean>;
+    };
+    /** Electron 中的插件开发日志桥；仅由 @wttch-hub/plugin-debug 消费。 */
+    pluginDebugHost?: {
+      log(entry: import('@wttch-hub/plugin-api').PluginDebugEntry): void;
+    };
 
-  /** Present inside Electron: forwards folderart's icon-font search to main. */
-  iconFontSearch?: (body: string) => Promise<IconfontSearchResponse>;
+    /** Present inside Electron: forwards folderart's icon-font search to main. */
+    iconFontSearch?: (body: string) => Promise<IconfontSearchResponse>;
+  }
 }
+
+export {};

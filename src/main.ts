@@ -11,7 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { registerAiIpc } from '@module/ai/main';
 import { registerWechatIpc } from './services/main';
 import { registerDataIpc } from './data/main';
-import { createPreferences, shouldHideOnClose } from './desktop/preferences';
+import { createPreferences, shouldHideOnClose, writeJson } from './desktop/preferences';
 import { createSystemTray, getApplicationIconPath } from './desktop/tray';
 import fs from 'node:fs';
 import started from 'electron-squirrel-startup';
@@ -43,6 +43,13 @@ type FloatingWidgetOptions = {
   locked?: boolean
 };
 
+/**
+ * 插件管理页面使用的 ZIP 插件包发现目录。
+ *
+ * 它与 `plugin-src` 相互独立：主进程读取包元数据以列出、安装或删除压缩包，但当前
+ * 渲染构建不会动态执行 ZIP 包。可运行的源码插件通过 `src/config/tools.ts` 中的
+ * Vite glob 加载。
+ */
 const pluginDirectories = () => [
   { directory: path.join(app.getPath('userData'), 'plugins'), source: 'managed' as const, removable: true },
   // 开发期构建的插件包固定进入项目沙盒，避免把可再生的 ZIP 混入源码或用户正式仓库。
@@ -102,6 +109,29 @@ if (!primaryInstance) app.quit();
 let quitting = false;
 app.on('before-quit', () => { quitting = true; });
 let preferences: ReturnType<typeof createPreferences>;
+
+/**
+ * 工作台窗口状态属于宿主全局数据而非插件私有数据，因此直接存放在
+ * `<userData>/data.json`，而不是 `plugin-data/<id>` 目录。数据结构以 `window`
+ * 命名空间隔离，未来可在不改变文件位置的情况下加入其他宿主全局数据。无效或过期
+ * 的值会回退为默认窗口尺寸。
+ */
+type StoredWorkbenchWindow = { width: number; height: number };
+const workbenchDataFile = () => path.join(app.getPath('userData'), 'data.json');
+const readWorkbenchWindow = (): StoredWorkbenchWindow | undefined => {
+  try {
+    const value = JSON.parse(fs.readFileSync(workbenchDataFile(), 'utf8')) as { window?: unknown };
+    const window = value?.window;
+    if (!window || typeof window !== 'object' || Array.isArray(window)) return undefined;
+    const { width, height } = window as { width?: unknown; height?: unknown };
+    if (typeof width !== 'number' || typeof height !== 'number' || !Number.isFinite(width) || !Number.isFinite(height)) return undefined;
+    return { width: Math.round(Math.max(600, width)), height: Math.round(Math.max(420, height)) };
+  } catch { return undefined; }
+};
+const saveWorkbenchWindow = (bounds: Electron.Rectangle) => {
+  try { writeJson(workbenchDataFile(), { window: { width: bounds.width, height: bounds.height } }); }
+  catch (error) { console.warn('[window] failed to save size:', error); }
+};
 
 // 渲染进程的 console 默认只在 DevTools 可见。将 warning/error 转发到主进程，
 // 使从终端启动 Electron 时也能直接看到插件与页面异常。
@@ -447,7 +477,19 @@ ipcMain.handle(IPC.pluginRemove, (_event, input: { file?: unknown; source?: unkn
 });
 
 /** 插件私有数据按插件 ID 分目录保存，便于后续替换为 OSS 同步适配器。 */
+/**
+ * `context.storage` 的持久化存储位置。
+ *
+ * 插件不会传递文件名。其 ID 会由 `safeFloatingPluginId` 校验，然后作为 Electron
+ * `userData` 目录下的一层目录：
+ *   <userData>/plugin-data/<pluginId>/data.json
+ *
+ * Windows 中 `userData` 通常对应 `%APPDATA%/wttch-hub`；但发行版和测试配置可使用
+ * 不同的 userData 目录，因此插件不得硬编码路径。每个文件保存一个 JSON 对象，包含
+ * 对应插件的全部键。
+ */
 const pluginStorageFile = (pluginId: string) => path.join(app.getPath('userData'), 'plugin-data', pluginId, 'data.json');
+/** 读取失败、文件缺失或 JSON 损坏均按空数据处理，避免可选插件缓存受损阻止工作台启动。 */
 const readPluginStorage = (pluginId: unknown): Record<string, unknown> => {
   if (!safeFloatingPluginId(pluginId)) return {};
   try {
@@ -455,7 +497,9 @@ const readPluginStorage = (pluginId: unknown): Record<string, unknown> => {
     return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
   } catch { return {}; }
 };
+/** 启动期读取端点。运行时构造必须在插件生命周期钩子运行前取得数据，故采用同步调用。 */
 ipcMain.on(IPC.pluginStorageRead, (event, pluginId: unknown) => { event.returnValue = readPluginStorage(pluginId); });
+/** 写入端点只接受普通对象，按需创建插件私有目录，并整体替换该插件唯一的 JSON 文档。 */
 ipcMain.handle(IPC.pluginStorageWrite, (_event, pluginId: unknown, value: unknown) => {
   if (!safeFloatingPluginId(pluginId) || !value || typeof value !== 'object' || Array.isArray(value)) return false;
   const file = pluginStorageFile(pluginId);
@@ -630,10 +674,12 @@ let systemTray: ReturnType<typeof createSystemTray> | undefined;
 
 const createWindow = () => {
   if (workbenchWindow && !workbenchWindow.isDestroyed()) return workbenchWindow;
+  // 仅恢复尺寸。坐标交由系统决定，避免下次启动时此前使用的显示器已经断开。
+  const savedWindow = readWorkbenchWindow();
   const mainWindow = new BrowserWindow({
     icon: getApplicationIconPath(),
-    width: 960,
-    height: 640,
+    width: savedWindow?.width ?? 960,
+    height: savedWindow?.height ?? 640,
     minWidth: 600,
     minHeight: 420,
     frame: !CUSTOM_CHROME,
@@ -660,15 +706,33 @@ const createWindow = () => {
   });
 
   workbenchWindow = mainWindow;
+  // 用户拖拽时会连续触发 resize，因此对持久化写入做防抖；使用普通窗口边界，
+  // 防止最大化时以当前显示器的全屏尺寸覆盖用户偏好的恢复尺寸。
+  let saveWindowTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleWindowSizeSave = () => {
+    if (saveWindowTimer) clearTimeout(saveWindowTimer);
+    saveWindowTimer = setTimeout(() => {
+      saveWindowTimer = undefined;
+      if (!mainWindow.isDestroyed()) saveWorkbenchWindow(mainWindow.getNormalBounds());
+    }, 250);
+  };
+  const saveWindowSizeNow = () => {
+    if (saveWindowTimer) clearTimeout(saveWindowTimer);
+    saveWindowTimer = undefined;
+    if (!mainWindow.isDestroyed()) saveWorkbenchWindow(mainWindow.getNormalBounds());
+  };
+  mainWindow.on('resize', scheduleWindowSizeSave);
   // Windows 注销/关机不一定先触发 before-quit，允许系统正常结束会话。
   mainWindow.on('query-session-end', () => { quitting = true; });
   mainWindow.on('close', (event) => {
+    saveWindowSizeNow();
     if (quitting) return;
     event.preventDefault();
     if (shouldHideOnClose(preferences.get(), quitting, Boolean(systemTray))) mainWindow.hide();
     else app.quit();
   });
   mainWindow.on('closed', () => {
+    if (saveWindowTimer) clearTimeout(saveWindowTimer);
     if (workbenchWindow === mainWindow) workbenchWindow = undefined;
     systemTray?.refresh();
   });

@@ -64,6 +64,16 @@ const builtinTools: ToolPlugin[] = [
 
 // 所有可执行插件统一放在 plugin-src。工作台启动前先生成清单，Vite 再在
 // 此处发现入口并编译页面和 Widget；组件保持懒加载，避免启动时加载全部代码。
+/**
+ * 源码插件加载入口。
+ *
+ * `plugin-src/<plugin-id>/` 下的目录即为源码插件，其 `index.ts` 默认导出必须是
+ * ToolPlugin。Vite 会在构建期展开此 glob，因此源码插件会被打包进渲染进程，
+ * 而不是在 Electron 启动后从文件系统动态加载。
+ *
+ * 插件组件仍可采用懒加载（`() => import(...)`），仅在访问对应路由或 Widget 时
+ * 才加载 UI 代码。新增内置开发插件时，创建 `plugin-src/<id>/index.ts` 即可。
+ */
 const pluginSources = import.meta.glob('../../plugin-src/*/index.ts', {
   eager: true,
   import: 'default',

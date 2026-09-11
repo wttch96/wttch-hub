@@ -33,6 +33,14 @@ type PersistedState = {
 export type PluginRuntimeStatus = 'disabled' | 'loading' | 'ready' | 'activating' | 'active' | 'error';
 export type PluginRuntimeState = { enabled: boolean; status: PluginRuntimeStatus; error?: string; activeScopes: number };
 
+/**
+ * 渲染进程运行时快照。它刻意与各插件的 `data.json` 文件分离，使另一个渲染进程
+ * （例如悬浮 Widget）能够通过浏览器 `storage` 事件观察数据变化。
+ *
+ * 其中包含启用标记、清单设置和插件私有存储缓存。下方 `savePluginStorage` 仅将
+ * 私有存储部分镜像到 Electron 的按插件分文件持久化存储。不要将此键作为外部
+ * 存储契约；插件代码必须使用 `context.storage`。
+ */
 const persistenceKey = 'wttch-hub:plugin-runtime:v1';
 const legacyKey = 'wttch-hub:plugin-settings';
 const persisted: PersistedState = (() => {
@@ -78,6 +86,17 @@ const save = () => localStorage.setItem(persistenceKey, JSON.stringify({
  * 因此发送前先按落盘格式还原成纯数据；浅拷贝只会把代理原样带过去。
  */
 const toPlainData = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+/**
+ * 持久化存储桥：渲染进程 → preload → 主进程 → 文件。
+ *
+ * 渲染进程持有 Vue 响应式状态。Electron IPC 无法安全持久化 Vue Proxy，因此先
+ * 转为普通 JSON 兼容数据。preload 桥只暴露 `read`/`write`，而不开放通用 IPC；
+ * 主进程会在写入前校验插件 ID：
+ *   app.getPath('userData')/plugin-data/<pluginId>/data.json
+ *
+ * 由于公开的 storage API 是同步接口，写入刻意采用不等待结果的方式。未来若提供
+ * 异步 API，可等待这项操作，而无需改动磁盘格式或插件键值契约。
+ */
 const savePluginStorage = (pluginId: string) => {
   void window.pluginStorageHost?.write(pluginId, toPlainData(storage[pluginId] ?? {}));
 };
@@ -213,6 +232,15 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
       update: (key, value) => updateSetting(plugin.id, key, value),
       onDidChange: (listener) => trackDisposable(plugin.id, { dispose: () => listeners.delete(listener) }),
     },
+    /**
+     * 插件私有键值存储。
+     *
+     * 所有方法均会按当前 `plugin.id` 自动命名空间隔离；调用方只需提供自己的键，
+     * 无需也不得提供路径或其他插件 ID。`update` 和 `delete` 会更新渲染缓存、同步
+     * 悬浮渲染器共享的 localStorage 快照，再将完整对象镜像到 Electron data.json。
+     * 监听器在本地值更新后执行。仅保存 JSON 兼容数据，勿保存函数、DOM 节点、Vue
+     * ref、循环引用或 API Key 等敏感信息。
+     */
     storage: {
       get: <T>(key: string, fallback?: T) => (storage[plugin.id]?.[key] as T | undefined) ?? fallback,
       update: (key, value) => { storage[plugin.id][key] = value; save(); savePluginStorage(plugin.id); pluginStorageListeners.forEach((listener) => listener(key, value)); },
@@ -295,6 +323,13 @@ const syncServices = async () => {
   })) : [])).catch(() => useToast().error('服务分发暂时不可用，请重启桌面应用；本地插件继续运行。'));
 };
 
+/**
+ * 在每个渲染进程生命周期内，对每个已启用插件仅执行一次 `events.load` 钩子。
+ *
+ * `App.vue` 会在壳层完成首帧渲染后调用它。悬浮窗口会传入 id，以避免启动无关的
+ * 后台插件。此步骤仅准备插件服务，不代表插件页面已激活；页面和 Widget 的激活
+ * 由 `acquirePlugin` 引用计数管理。
+ */
 export const initializePlugins = async (pluginIds?: string[]) => {
   if (initialized) return;
   initialized = true;
@@ -303,6 +338,11 @@ export const initializePlugins = async (pluginIds?: string[]) => {
   await Promise.all(allTools.filter((plugin) => states[plugin.id].enabled && (!selected || selected.has(plugin.id))).map((plugin) => enqueueLifecycle(plugin.id, () => load(plugin))));
 };
 
+/**
+ * 为路由、Widget 或悬浮 Widget 获取一次插件活动使用权。首次获取会执行
+ * `events.activate`；返回的释放函数会减少作用域计数，最后一次释放会执行
+ * `events.deactivate`。路由宿主在卸载时必须调用该释放函数。
+ */
 export const acquirePlugin = async (id: string, reason: PluginActivationReason, path = ''): Promise<() => Promise<void>> => enqueueLifecycle(id, async () => {
   const plugin = pluginFor(id); const state = states[id]; const token = Symbol(id);
   if (!plugin || !state?.enabled) return async () => undefined;

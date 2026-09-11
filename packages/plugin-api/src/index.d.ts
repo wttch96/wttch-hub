@@ -90,6 +90,15 @@ export interface PluginSettingsApi {
 
 export interface PluginStorageApi {
   /**
+   * 插件私有键值存储，按当前插件 ID 自动隔离。在 Electron 桌面端，运行时会将
+   * 此对象镜像至 `<userData>/plugin-data/<pluginId>/data.json`；调用方不得自行
+   * 拼接路径或访问其他插件的 ID。
+   *
+   * 仅能通过生命周期或组件 API 调用 `get`、`update` 与 `delete`。值必须兼容 JSON。
+   * 更新会通知 `onDidChange` 监听器并同步共享渲染缓存，宿主会调度磁盘写入。该抽象
+   * 支持未来接入云同步，而无需迁移插件 API 或数据布局。
+   */
+  /**
    * 插件私有键值存储。宿主按 pluginId 隔离数据，并在桌面端保存到
    * plugin-data/<pluginId>/data.json；未来可替换为 OSS 同步实现而不改变插件 API。
    */

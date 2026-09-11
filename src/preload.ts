@@ -7,7 +7,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcRendererEvent } from 'electron';
 import type { AiBridge } from '@module/ai';
-import type { AiStatus, FloatingWidgetWindowOptions, PluginDebugEntry, PluginNotification } from '@wttch-hub/plugin-api';
+import type {
+  AiStatus,
+  FloatingWidgetWindowOptions,
+  PluginDebugEntry,
+  PluginNotification,
+} from '@wttch-hub/plugin-api';
 
 // On Windows the renderer draws a full macOS-style title bar, so expose a
 // small, explicit surface for driving the native window from the page.
@@ -38,10 +43,14 @@ const windowControls = {
 
 const toolHost = {
   stats: () => ipcRenderer.invoke('system:stats'),
-  showNotification: (options: PluginNotification) => ipcRenderer.invoke('notifications:show', options),
-  openFloatingWidget: (pluginId: string, options?: FloatingWidgetWindowOptions) => ipcRenderer.invoke('floating-widget:open', pluginId, options),
-  updateFloatingWidget: (pluginId: string, options: FloatingWidgetWindowOptions) => ipcRenderer.invoke('floating-widget:update', pluginId, options),
-  closeFloatingWidget: (pluginId: string, id?: string) => ipcRenderer.invoke('floating-widget:close', pluginId, id),
+  showNotification: (options: PluginNotification) =>
+    ipcRenderer.invoke('notifications:show', options),
+  openFloatingWidget: (pluginId: string, options?: FloatingWidgetWindowOptions) =>
+    ipcRenderer.invoke('floating-widget:open', pluginId, options),
+  updateFloatingWidget: (pluginId: string, options: FloatingWidgetWindowOptions) =>
+    ipcRenderer.invoke('floating-widget:update', pluginId, options),
+  closeFloatingWidget: (pluginId: string, id?: string) =>
+    ipcRenderer.invoke('floating-widget:close', pluginId, id),
   showWorkbench: () => ipcRenderer.invoke('workbench:show'),
 };
 
@@ -53,32 +62,56 @@ export type NetworkDebugOpenInput = {
   remoteHost: string;
   remotePort: number;
 };
-export type NetworkDebugMessage = { dataBase64: string; remoteHost: string; remotePort: number; timestamp: string };
+
+export type NetworkDebugMessage = {
+  dataBase64: string;
+  remoteHost: string;
+  remotePort: number;
+  timestamp: string;
+};
 const networkDebugHost = {
   open: (input: NetworkDebugOpenInput) => ipcRenderer.invoke('network-debug:open', input),
   close: () => ipcRenderer.invoke('network-debug:close'),
   clients: () => ipcRenderer.invoke('network-debug:clients'),
-  disconnectClient: (clientId: string) => ipcRenderer.invoke('network-debug:disconnect-client', clientId),
-  send: (dataBase64: string, clientId?: string) => ipcRenderer.invoke('network-debug:send', dataBase64, clientId),
+  disconnectClient: (clientId: string) =>
+    ipcRenderer.invoke('network-debug:disconnect-client', clientId),
+  send: (dataBase64: string, clientId?: string) =>
+    ipcRenderer.invoke('network-debug:send', dataBase64, clientId),
   onMessage(callback: (message: NetworkDebugMessage) => void) {
     const listener = (_event: IpcRendererEvent, message: NetworkDebugMessage) => callback(message);
     ipcRenderer.on('network-debug:message', listener);
     return () => ipcRenderer.removeListener('network-debug:message', listener);
   },
   onState(callback: (state: { open: boolean; error?: string }) => void) {
-    const listener = (_event: IpcRendererEvent, state: { open: boolean; error?: string }) => callback(state);
+    const listener = (_event: IpcRendererEvent, state: { open: boolean; error?: string }) =>
+      callback(state);
     ipcRenderer.on('network-debug:state', listener);
     return () => ipcRenderer.removeListener('network-debug:state', listener);
   },
   onClients(callback: (clients: Array<{ id: string; host: string; port: number }>) => void) {
-    const listener = (_event: IpcRendererEvent, clients: Array<{ id: string; host: string; port: number }>) => callback(clients);
+    const listener = (
+      _event: IpcRendererEvent,
+      clients: Array<{ id: string; host: string; port: number }>,
+    ) => callback(clients);
     ipcRenderer.on('network-debug:clients', listener);
     return () => ipcRenderer.removeListener('network-debug:clients', listener);
   },
 };
+/**
+ * 面向渲染进程运行时的受限、上下文隔离存储桥。
+ *
+ * 它刻意不属于插件 API。插件从 `src/plugins/runtime.ts` 获得已完成命名空间隔离的
+ * `context.storage` API。将原始桥保留在此处，可防止插件组件任意指定插件 ID 或
+ * 获取通用 ipcRenderer 句柄。
+ *
+ * `read` 仅在渲染进程启动、插件模块访问存储前同步调用；`write` 为异步操作，
+ * 由 Electron 主进程处理。
+ */
 const pluginStorageHost = {
-  read: (pluginId: string): Record<string, unknown> => ipcRenderer.sendSync('plugin-storage:read', pluginId),
-  write: (pluginId: string, value: Record<string, unknown>) => ipcRenderer.invoke('plugin-storage:write', pluginId, value),
+  read: (pluginId: string): Record<string, unknown> =>
+    ipcRenderer.sendSync('plugin-storage:read', pluginId),
+  write: (pluginId: string, value: Record<string, unknown>) =>
+    ipcRenderer.invoke('plugin-storage:write', pluginId, value),
 };
 
 export type WindowControlsApi = typeof windowControls;
@@ -93,7 +126,8 @@ contextBridge.exposeInMainWorld('toolHost', {
   showWorkbench: toolHost.showWorkbench,
   pluginPackages: () => ipcRenderer.invoke('plugins:list'),
   installPluginPackage: () => ipcRenderer.invoke('plugins:install'),
-  removePluginPackage: (input: { file: string; source?: 'managed' | 'sandbox' | 'workspace' }) => ipcRenderer.invoke('plugins:remove', input),
+  removePluginPackage: (input: { file: string; source?: 'managed' | 'sandbox' | 'workspace' }) =>
+    ipcRenderer.invoke('plugins:remove', input),
 });
 contextBridge.exposeInMainWorld('networkDebugHost', networkDebugHost);
 contextBridge.exposeInMainWorld('pluginStorageHost', pluginStorageHost);
@@ -120,15 +154,18 @@ contextBridge.exposeInMainWorld('iconFontSearch', iconFontSearch);
 /** API Key 只允许经 configure 单向提交，不提供读取接口，也不放入 localStorage。 */
 const aiHost: AiBridge = {
   getStatus: () => ipcRenderer.invoke('ai:status'),
-  configure: (input) => ipcRenderer.invoke('ai:configure', input),
+  configure: input => ipcRenderer.invoke('ai:configure', input),
   chat: (owner, request) => ipcRenderer.invoke('ai:chat', owner, request),
   stream: async (owner, request, onChunk) => {
     const listener = (_event: IpcRendererEvent, requestId: string, content: string) => {
       if (requestId === request.requestId) onChunk(content);
     };
     ipcRenderer.on('ai:chat-chunk', listener);
-    try { return await ipcRenderer.invoke('ai:chat-stream', owner, request); }
-    finally { ipcRenderer.removeListener('ai:chat-chunk', listener); }
+    try {
+      return await ipcRenderer.invoke('ai:chat-stream', owner, request);
+    } finally {
+      ipcRenderer.removeListener('ai:chat-chunk', listener);
+    }
   },
   test: (owner, requestId) => ipcRenderer.invoke('ai:test', owner, requestId),
   cancel: (owner, requestId) => ipcRenderer.invoke('ai:cancel', owner, requestId),
@@ -167,7 +204,10 @@ const wechatHost: import('./services/contracts').WechatBridge = {
   setEnabled: enabled => ipcRenderer.invoke('wechat:enabled', enabled),
   saveRules: rules => ipcRenderer.invoke('wechat:rules', rules),
   onDidChange(callback) {
-    const listener = (_event: IpcRendererEvent, status: import('./services/contracts').WechatStatus) => callback(status);
+    const listener = (
+      _event: IpcRendererEvent,
+      status: import('./services/contracts').WechatStatus,
+    ) => callback(status);
     ipcRenderer.on('wechat:changed', listener);
     return { dispose: () => ipcRenderer.removeListener('wechat:changed', listener) };
   },
