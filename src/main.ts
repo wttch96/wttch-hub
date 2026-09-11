@@ -5,6 +5,8 @@
 import { app, BrowserWindow, dialog, ipcMain, net, Notification, screen } from 'electron';
 import 'dotenv/config';
 import path from 'node:path';
+import dgram from 'node:dgram';
+import tcp from 'node:net';
 import { pathToFileURL } from 'node:url';
 import { registerAiIpc } from '@module/ai/main';
 import { registerWechatIpc } from './services/main';
@@ -163,6 +165,132 @@ const IPC = {
   pluginStorageRead: 'plugin-storage:read',
   pluginStorageWrite: 'plugin-storage:write',
 } as const;
+
+type NetworkDebugInput = {
+  type: 'udp' | 'tcp'; tcpMode?: 'client' | 'server'; localHost: string; localPort: number; remoteHost: string; remotePort: number;
+};
+type NetworkDebugClient = { id: string; socket: tcp.Socket; host: string; port: number };
+type NetworkDebugSession = { udp?: dgram.Socket; tcp?: tcp.Socket; server?: tcp.Server; clients?: Map<string, NetworkDebugClient>; input: NetworkDebugInput };
+const networkDebugSessions = new Map<number, NetworkDebugSession>();
+const isNetworkDebugInput = (value: unknown): value is NetworkDebugInput => {
+  if (!value || typeof value !== 'object') return false;
+  const input = value as Record<string, unknown>;
+  const validPort = (port: unknown) => typeof port === 'number' && Number.isInteger(port) && port >= 0 && port <= 65535;
+  const isTcpServer = input.type === 'tcp' && input.tcpMode === 'server';
+  return (input.type === 'udp' || input.type === 'tcp')
+    && (input.tcpMode === undefined || input.tcpMode === 'client' || input.tcpMode === 'server')
+    && typeof input.localHost === 'string' && input.localHost.length <= 255
+    && validPort(input.localPort)
+    && (isTcpServer || (typeof input.remoteHost === 'string' && input.remoteHost.length <= 255 && validPort(input.remotePort) && (input.remotePort as number) > 0));
+};
+const closeNetworkDebugSession = (webContentsId: number) => {
+  const session = networkDebugSessions.get(webContentsId);
+  if (!session) return;
+  networkDebugSessions.delete(webContentsId);
+  session.udp?.close();
+  session.tcp?.destroy();
+  session.clients?.forEach(client => client.socket.destroy());
+  session.server?.close();
+};
+const sendNetworkDebugState = (webContents: Electron.WebContents, state: { open: boolean; error?: string }) => {
+  if (!webContents.isDestroyed()) webContents.send('network-debug:state', state);
+};
+const sendNetworkDebugClients = (webContents: Electron.WebContents, clients: Map<string, NetworkDebugClient>) => {
+  if (!webContents.isDestroyed()) webContents.send('network-debug:clients', [...clients.values()].map(({ id, host, port }) => ({ id, host, port })));
+};
+
+ipcMain.handle('network-debug:open', async (event, input: unknown) => {
+  if (!isNetworkDebugInput(input)) return { ok: false, error: '网络参数无效，请检查地址和端口。' };
+  closeNetworkDebugSession(event.sender.id);
+  const emitMessage = (data: Buffer, remoteHost: string, remotePort: number) => {
+    if (!event.sender.isDestroyed()) event.sender.send('network-debug:message', {
+      dataBase64: data.toString('base64'), remoteHost, remotePort, timestamp: new Date().toISOString(),
+    });
+  };
+  try {
+    if (input.type === 'udp') {
+      const socket = dgram.createSocket('udp4');
+      await new Promise<void>((resolve, reject) => {
+        socket.once('error', reject);
+        socket.bind(input.localPort, input.localHost, () => { socket.off('error', reject); resolve(); });
+      });
+      socket.on('message', (data, remote) => emitMessage(data, remote.address, remote.port));
+      socket.on('error', error => sendNetworkDebugState(event.sender, { open: false, error: error.message }));
+      networkDebugSessions.set(event.sender.id, { udp: socket, input });
+    } else if (input.tcpMode !== 'server') {
+      const socket = new tcp.Socket();
+      await new Promise<void>((resolve, reject) => {
+        const fail = (error: Error) => { socket.destroy(); reject(error); };
+        socket.once('error', fail);
+        socket.connect({ host: input.remoteHost, port: input.remotePort, localAddress: input.localHost, localPort: input.localPort }, () => {
+          socket.off('error', fail); resolve();
+        });
+      });
+      socket.on('data', data => emitMessage(Buffer.isBuffer(data) ? data : Buffer.from(data), input.remoteHost, input.remotePort));
+      socket.on('close', () => {
+        if (networkDebugSessions.get(event.sender.id)?.tcp === socket) {
+          networkDebugSessions.delete(event.sender.id); sendNetworkDebugState(event.sender, { open: false });
+        }
+      });
+      socket.on('error', error => sendNetworkDebugState(event.sender, { open: false, error: error.message }));
+      networkDebugSessions.set(event.sender.id, { tcp: socket, input });
+    } else {
+      const clients = new Map<string, NetworkDebugClient>();
+      const server = tcp.createServer(socket => {
+        const peer = `${socket.remoteAddress ?? 'unknown'}`;
+        const peerPort = socket.remotePort ?? 0;
+        const id = `${peer}:${peerPort}`;
+        clients.set(id, { id, socket, host: peer, port: peerPort });
+        sendNetworkDebugClients(event.sender, clients);
+        socket.on('data', data => emitMessage(Buffer.isBuffer(data) ? data : Buffer.from(data), peer, peerPort));
+        const removeClient = () => { clients.delete(id); sendNetworkDebugClients(event.sender, clients); };
+        socket.on('close', removeClient);
+        socket.on('error', removeClient);
+      });
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(input.localPort, input.localHost, () => { server.off('error', reject); resolve(); });
+      });
+      server.on('error', error => sendNetworkDebugState(event.sender, { open: false, error: error.message }));
+      networkDebugSessions.set(event.sender.id, { server, clients, input });
+    }
+    sendNetworkDebugState(event.sender, { open: true });
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    sendNetworkDebugState(event.sender, { open: false, error: message });
+    return { ok: false, error: message };
+  }
+});
+ipcMain.handle('network-debug:close', (event) => { closeNetworkDebugSession(event.sender.id); sendNetworkDebugState(event.sender, { open: false }); return true; });
+ipcMain.handle('network-debug:clients', (event) => {
+  const clients = networkDebugSessions.get(event.sender.id)?.clients;
+  return clients ? [...clients.values()].map(({ id, host, port }) => ({ id, host, port })) : [];
+});
+ipcMain.handle('network-debug:disconnect-client', (event, clientId: unknown) => {
+  if (typeof clientId !== 'string') return false;
+  const client = networkDebugSessions.get(event.sender.id)?.clients?.get(clientId);
+  if (!client) return false;
+  client.socket.destroy();
+  return true;
+});
+ipcMain.handle('network-debug:send', async (event, dataBase64: unknown, clientId?: unknown) => {
+  if (typeof dataBase64 !== 'string' || dataBase64.length > 2_800_000 || !/^[A-Za-z0-9+/]*={0,2}$/.test(dataBase64)) return { ok: false, error: '发送数据无效或过大。' };
+  const session = networkDebugSessions.get(event.sender.id);
+  if (!session) return { ok: false, error: '请先打开连接。' };
+  const data = Buffer.from(dataBase64, 'base64');
+  try {
+    if (session.udp) await new Promise<void>((resolve, reject) => session.udp?.send(data, session.input.remotePort, session.input.remoteHost, error => error ? reject(error) : resolve()));
+    else if (session.tcp) await new Promise<void>((resolve, reject) => session.tcp?.write(data, error => error ? reject(error) : resolve()));
+    else if (session.clients) {
+      if (typeof clientId !== 'string') return { ok: false, error: '请先选择一个 TCP 客户端。' };
+      const client = session.clients.get(clientId);
+      if (!client || client.socket.destroyed) return { ok: false, error: '所选 TCP 客户端已断开。' };
+      await new Promise<void>((resolve, reject) => client.socket.write(data, error => error ? reject(error) : resolve()));
+    }
+    return { ok: true };
+  } catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) }; }
+});
 
 const floatingWidgets = new Map<string, BrowserWindow>();
 const safeFloatingPluginId = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(value);
@@ -734,7 +862,11 @@ app.on('ready', () => {
   createWindow();
 });
 
-app.on('will-quit', () => { debugLog('app', 'will quit'); systemTray?.destroy(); systemTray = undefined; });
+app.on('will-quit', () => {
+  debugLog('app', 'will quit');
+  for (const webContentsId of networkDebugSessions.keys()) closeNetworkDebugSession(webContentsId);
+  systemTray?.destroy(); systemTray = undefined;
+});
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

@@ -99,6 +99,17 @@ export interface PluginStorageApi {
   onDidChange(listener: (key: string, value: unknown) => void): Disposable;
 }
 
+/** Theme colors registered by built-in or third-party tools. */
+export type ThemeColor = { key: string; value: string; defaultValue: string; description?: string };
+/** Stable theme surface exposed by the host instead of requiring an extension lookup. */
+export interface PluginThemeApi {
+  registerColor(key: string, defaultValue: string, description?: string): Disposable;
+  getColor(key: string): string | undefined;
+  setColor(key: string, value: string): void;
+  getColors(): ThemeColor[];
+  onDidChange(listener: () => void): Disposable;
+}
+
 /** 可移植的插件数据快照；只含当前插件 storage，不含设置或宿主 AI 密钥。 */
 export type PluginDataSnapshot = {
   format: 'wttch-hub-plugin-data';
@@ -218,6 +229,7 @@ export interface PluginComponentApi {
   ai: PluginAiApi;
   settings: PluginSettingsApi;
   storage: PluginStorageApi;
+  theme: PluginThemeApi;
   data: PluginDataApi;
   services: PluginServicesApi;
   ui: PluginUiApi;
@@ -238,6 +250,7 @@ export interface PluginActivationContext {
   subscriptions: Disposable[];
   settings: PluginSettingsApi;
   storage: PluginStorageApi;
+  theme: PluginThemeApi;
   data: PluginDataApi;
   services: PluginServicesApi;
   ui: PluginUiApi;

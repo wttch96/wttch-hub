@@ -1,17 +1,8 @@
 /** 文件说明：主题插件对其他插件开放的颜色 token 注册与读取扩展。 */
 
-import type { Disposable, PluginSettingsApi, PluginStorageApi } from '@wttch-hub/plugin-api';
+import type { Disposable, PluginSettingsApi, PluginStorageApi, PluginThemeApi, ThemeColor } from '@wttch-hub/plugin-api';
 
-export type ThemeColor = { key: string; value: string; defaultValue: string; description?: string };
-export interface ThemeExtension {
-  registerColor(key: string, defaultValue: string, description?: string): Disposable;
-  getColor(key: string): string | undefined;
-  setColor(key: string, value: string): void;
-  getColors(): ThemeColor[];
-  onDidChange(listener: () => void): Disposable;
-}
-
-type ThemeExtensionController = ThemeExtension & {
+type ThemeExtensionController = PluginThemeApi & {
   registerThemeColor(key: string, settingKey: string, description: string): Disposable;
 };
 

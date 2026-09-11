@@ -16,6 +16,7 @@ import type {
   PluginComponentApi,
   PluginDeactivationReason,
   PluginLifecycleContext,
+  PluginThemeApi,
   ToolPlugin,
 } from '@wttch-hub/plugin-api';
 import { createElectronPluginDebugger } from '@wttch-hub/plugin-debug';
@@ -149,6 +150,24 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
   const toast = useToast();
   const sheet = useSheet();
   const debug = createElectronPluginDebugger({ pluginId: plugin.id }).api;
+  const theme: PluginThemeApi = {
+    registerColor: (key, defaultValue, description) => {
+      const extension = extensions.get<PluginThemeApi>('theme');
+      if (!extension) throw new Error('主题服务尚未就绪');
+      return extension.registerColor(key, defaultValue, description);
+    },
+    getColor: key => extensions.get<PluginThemeApi>('theme')?.getColor(key),
+    setColor: (key, value) => {
+      const extension = extensions.get<PluginThemeApi>('theme');
+      if (!extension) throw new Error('主题服务尚未就绪');
+      extension.setColor(key, value);
+    },
+    getColors: () => extensions.get<PluginThemeApi>('theme')?.getColors() ?? [],
+    onDidChange: listener => {
+      const extension = extensions.get<PluginThemeApi>('theme');
+      return extension ? extension.onDidChange(listener) : { dispose: () => undefined };
+    },
+  };
   return {
     path,
     reason,
@@ -200,6 +219,7 @@ const contextFor = (plugin: ToolPlugin, path: string, reason: PluginActivationRe
       delete: (key) => { delete storage[plugin.id][key]; save(); savePluginStorage(plugin.id); pluginStorageListeners.forEach((listener) => listener(key, undefined)); },
       onDidChange: (listener) => trackDisposable(plugin.id, { dispose: () => pluginStorageListeners.delete(listener) }),
     },
+    theme,
     ui: {
       showToast: (...args) => {
         if (!plugin.capabilities?.toast) throw new Error(`插件 ${plugin.id} 未声明 toast 能力`);
@@ -338,8 +358,8 @@ export const pluginRuntime = {
   componentApi(id: string): PluginComponentApi | undefined {
     const plugin = pluginFor(id);
     if (!plugin) return undefined;
-    const { host, ai, data, services, settings, storage: pluginStorage, ui, debug, extensions: pluginExtensions } = contextFor(plugin, '', 'manual');
-    return { host, ai, data, services, settings, storage: pluginStorage, ui, debug, extensions: pluginExtensions };
+    const { host, ai, data, services, settings, storage: pluginStorage, theme, ui, debug, extensions: pluginExtensions } = contextFor(plugin, '', 'manual');
+    return { host, ai, data, services, settings, storage: pluginStorage, theme, ui, debug, extensions: pluginExtensions };
   },
   async shutdown() { await Promise.all(allTools.map((plugin) => enqueueLifecycle(plugin.id, () => unload(plugin, 'shutdown')))); },
 };

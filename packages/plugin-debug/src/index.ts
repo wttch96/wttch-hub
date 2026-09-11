@@ -135,6 +135,13 @@ export const createPluginDebugHost = (options: PluginDebugHostOptions) => {
       },
       getExtension: <T extends object>(pluginId: string) => pluginId === options.pluginId ? extension as T | undefined : undefined,
     },
+    theme: {
+      registerColor: () => disposable(() => undefined),
+      getColor: () => undefined,
+      setColor: () => undefined,
+      getColors: () => [],
+      onDidChange: () => disposable(() => undefined),
+    },
     host: {
       systemStats: async () => ({ cpu: 0, memory: 0, gpu: 0, readBytes: 0, writeBytes: 0, downloadBytes: 0, uploadBytes: 0 }),
       showNotification: async (notification) => {

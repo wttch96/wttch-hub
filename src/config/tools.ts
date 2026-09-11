@@ -9,8 +9,10 @@ import {
   Network,
 } from 'lucide-vue-next';
 import type { ToolPlugin } from '@wttch-hub/plugin-api';
+import ThemeTool from '../tools/theme';
 
 const builtinTools: ToolPlugin[] = [
+  ThemeTool,
   {
     apiVersion: 1,
     id: 'folderart',

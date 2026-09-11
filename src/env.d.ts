@@ -36,6 +36,16 @@ interface IconfontSearchResponse {
 }
 
 interface Window {
+  networkDebugHost?: {
+    open(input: import('./preload').NetworkDebugOpenInput): Promise<{ ok: boolean; error?: string }>;
+    close(): Promise<boolean>;
+    clients(): Promise<Array<{ id: string; host: string; port: number }>>;
+    disconnectClient(clientId: string): Promise<boolean>;
+    send(dataBase64: string, clientId?: string): Promise<{ ok: boolean; error?: string }>;
+    onMessage(callback: (message: import('./preload').NetworkDebugMessage) => void): () => void;
+    onState(callback: (state: { open: boolean; error?: string }) => void): () => void;
+    onClients(callback: (clients: Array<{ id: string; host: string; port: number }>) => void): () => void;
+  };
   serviceHost?: import('./services/contracts').ServiceBridge;
   wechatHost?: import('./services/contracts').WechatBridge;
   desktopHost?: import('./data/contracts').DesktopBridge;

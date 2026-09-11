@@ -44,6 +44,38 @@ const toolHost = {
   closeFloatingWidget: (pluginId: string, id?: string) => ipcRenderer.invoke('floating-widget:close', pluginId, id),
   showWorkbench: () => ipcRenderer.invoke('workbench:show'),
 };
+
+export type NetworkDebugOpenInput = {
+  type: 'udp' | 'tcp';
+  tcpMode?: 'client' | 'server';
+  localHost: string;
+  localPort: number;
+  remoteHost: string;
+  remotePort: number;
+};
+export type NetworkDebugMessage = { dataBase64: string; remoteHost: string; remotePort: number; timestamp: string };
+const networkDebugHost = {
+  open: (input: NetworkDebugOpenInput) => ipcRenderer.invoke('network-debug:open', input),
+  close: () => ipcRenderer.invoke('network-debug:close'),
+  clients: () => ipcRenderer.invoke('network-debug:clients'),
+  disconnectClient: (clientId: string) => ipcRenderer.invoke('network-debug:disconnect-client', clientId),
+  send: (dataBase64: string, clientId?: string) => ipcRenderer.invoke('network-debug:send', dataBase64, clientId),
+  onMessage(callback: (message: NetworkDebugMessage) => void) {
+    const listener = (_event: IpcRendererEvent, message: NetworkDebugMessage) => callback(message);
+    ipcRenderer.on('network-debug:message', listener);
+    return () => ipcRenderer.removeListener('network-debug:message', listener);
+  },
+  onState(callback: (state: { open: boolean; error?: string }) => void) {
+    const listener = (_event: IpcRendererEvent, state: { open: boolean; error?: string }) => callback(state);
+    ipcRenderer.on('network-debug:state', listener);
+    return () => ipcRenderer.removeListener('network-debug:state', listener);
+  },
+  onClients(callback: (clients: Array<{ id: string; host: string; port: number }>) => void) {
+    const listener = (_event: IpcRendererEvent, clients: Array<{ id: string; host: string; port: number }>) => callback(clients);
+    ipcRenderer.on('network-debug:clients', listener);
+    return () => ipcRenderer.removeListener('network-debug:clients', listener);
+  },
+};
 const pluginStorageHost = {
   read: (pluginId: string): Record<string, unknown> => ipcRenderer.sendSync('plugin-storage:read', pluginId),
   write: (pluginId: string, value: Record<string, unknown>) => ipcRenderer.invoke('plugin-storage:write', pluginId, value),
@@ -63,6 +95,7 @@ contextBridge.exposeInMainWorld('toolHost', {
   installPluginPackage: () => ipcRenderer.invoke('plugins:install'),
   removePluginPackage: (input: { file: string; source?: 'managed' | 'sandbox' | 'workspace' }) => ipcRenderer.invoke('plugins:remove', input),
 });
+contextBridge.exposeInMainWorld('networkDebugHost', networkDebugHost);
 contextBridge.exposeInMainWorld('pluginStorageHost', pluginStorageHost);
 
 // 调试日志只有固定的单向通道；不向插件暴露 ipcRenderer 或任意主进程能力。

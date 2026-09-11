@@ -7,7 +7,6 @@ import { computed, inject, onBeforeUnmount, ref } from 'vue';
 import { Check, Moon, Palette, Sun } from 'lucide-vue-next';
 import { PLUGIN_COMPONENT_API_KEY, type PluginComponentApi } from '@wttch-hub/plugin-api';
 import { customThemeDefaults, themePresets, type ThemePalette } from '../theme';
-import type { ThemeExtension } from '../extension';
 
 const props = withDefaults(defineProps<{
   preset?: string; scheme?: string; accentColor?: string; backgroundColor?: string;
@@ -23,10 +22,9 @@ const props = withDefaults(defineProps<{
 });
 const emit = defineEmits<{ 'update-setting': [key: string, value: string] }>();
 const api = inject<PluginComponentApi>(PLUGIN_COMPONENT_API_KEY);
-const themeExtension = api?.extensions.getExtension<ThemeExtension>('theme');
-const externalColors = () => (themeExtension?.getColors() ?? []).filter(color => !color.key.startsWith('theme.'));
+const externalColors = () => (api?.theme.getColors() ?? []).filter(color => !color.key.startsWith('theme.'));
 const registeredColors = ref(externalColors());
-const extensionListener = themeExtension?.onDidChange(() => { registeredColors.value = externalColors(); });
+const extensionListener = api?.theme.onDidChange(() => { registeredColors.value = externalColors(); });
 onBeforeUnmount(() => extensionListener?.dispose());
 const presetEntries = Object.entries(themePresets);
 const palette = computed<ThemePalette>(() => props.preset !== 'custom' && themePresets[props.preset]
